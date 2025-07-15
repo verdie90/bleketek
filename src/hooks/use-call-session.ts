@@ -94,6 +94,9 @@ export function useCallSession() {
   );
   const [currentCall, setCurrentCall] = useState<CallLog | null>(null);
   const [currentProspect, setCurrentProspect] = useState<Prospect | null>(null);
+  // Control for auto first call - start with false to require manual Start Phone
+  const [autoFirstCallEnabled, setAutoFirstCallEnabled] = useState(false);
+
   // Prospect filters - now loaded from phone settings
   const [prospectFilters, setProspectFilters] = useState<ProspectFilters>({
     statusName: phoneSettings?.defaultStatusFilter || "Baru", // Load from settings
@@ -690,6 +693,9 @@ export function useCallSession() {
       setCallQueue(availableProspects);
       setSessionTimer(0);
 
+      // Reset auto first call to require manual Start Phone button
+      setAutoFirstCallEnabled(false);
+
       console.log("🚀 Session started:", {
         sessionId: docRef.id,
         totalProspects: availableProspects.length,
@@ -793,6 +799,12 @@ export function useCallSession() {
 
     if (!currentSession) {
       return { success: false, error: "No active session" };
+    }
+
+    // Enable auto first call after first manual call
+    if (!autoFirstCallEnabled) {
+      console.log("🔔 Enabling auto first call for subsequent calls");
+      setAutoFirstCallEnabled(true);
     }
 
     // Check working schedule before starting call
@@ -1363,6 +1375,9 @@ export function useCallSession() {
       setCallTimer(0);
       setBreakTimer(0);
 
+      // Reset auto first call flag
+      setAutoFirstCallEnabled(false);
+
       return { success: true };
     } catch (err) {
       console.error("Error ending session:", err);
@@ -1678,7 +1693,8 @@ export function useCallSession() {
       !currentProspect &&
       !loading &&
       !isProcessingCall &&
-      workingScheduleStatus?.isWorkingTime
+      workingScheduleStatus?.isWorkingTime &&
+      autoFirstCallEnabled // Add this condition to prevent auto first call
     ) {
       const delayMs = (phoneSettings?.callDelaySeconds || 1) * 1000;
       console.log("🔄 useEffect detected session ready for first call:", {
@@ -1717,6 +1733,7 @@ export function useCallSession() {
     isProcessingCall,
     workingScheduleStatus?.isWorkingTime,
     phoneSettings?.callDelaySeconds,
+    autoFirstCallEnabled,
     startNextCall,
   ]);
 

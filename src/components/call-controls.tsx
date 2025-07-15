@@ -71,14 +71,11 @@ export function CallControls({ onCallStatusUpdate }: CallControlsProps) {
 
   const handleEndCall = async (dispositionId: string, notes?: string) => {
     try {
-
       // Show info about auto dial status when processing disposition
       if (phoneSettings?.autoDialEnabled === false) {
-
       }
-      
-      if (phoneSettings?.autoNextCall === false) {
 
+      if (phoneSettings?.autoNextCall === false) {
       }
 
       const result = await endCall(dispositionId, notes);
@@ -87,9 +84,7 @@ export function CallControls({ onCallStatusUpdate }: CallControlsProps) {
         console.error("❌ endCall failed:", result.error);
         alert(result.error || "Failed to process call disposition");
       } else {
-
         if (phoneSettings?.autoNextCall) {
-
         }
         onCallStatusUpdate?.(dispositionId, notes);
       }
@@ -105,6 +100,22 @@ export function CallControls({ onCallStatusUpdate }: CallControlsProps) {
       if (!result.success) {
         alert(result.error);
       }
+    }
+  };
+
+  const handleStartPhone = async () => {
+    try {
+      console.log("🔔 Starting phone manually via Start Phone button");
+      const result = await startNextCall();
+      if (!result.success) {
+        console.error("❌ startNextCall failed:", result.error);
+        alert(result.error || "Failed to start call");
+      } else {
+        console.log("✅ Phone started successfully");
+      }
+    } catch (error) {
+      console.error("❌ Error in handleStartPhone:", error);
+      alert("Failed to start phone");
     }
   };
 
@@ -149,11 +160,21 @@ export function CallControls({ onCallStatusUpdate }: CallControlsProps) {
             )}
             {phoneSettings !== null && (
               <>
-                <Badge variant={phoneSettings.autoDialEnabled ? "default" : "secondary"} className="text-xs">
+                <Badge
+                  variant={
+                    phoneSettings.autoDialEnabled ? "default" : "secondary"
+                  }
+                  className="text-xs"
+                >
                   {phoneSettings.autoDialEnabled ? "🔊 Auto-dial" : "📵 Manual"}
                 </Badge>
-                <Badge variant={phoneSettings.autoNextCall ? "default" : "secondary"} className="text-xs">
-                  {phoneSettings.autoNextCall ? "⏭️ Auto-next" : "👆 Manual-next"}
+                <Badge
+                  variant={phoneSettings.autoNextCall ? "default" : "secondary"}
+                  className="text-xs"
+                >
+                  {phoneSettings.autoNextCall
+                    ? "⏭️ Auto-next"
+                    : "👆 Manual-next"}
                 </Badge>
               </>
             )}
@@ -190,16 +211,24 @@ export function CallControls({ onCallStatusUpdate }: CallControlsProps) {
 
               {/* Working Schedule Status */}
               {workingScheduleStatus && (
-                <div className={`p-2 rounded-md flex items-center gap-2 ${
-                  workingScheduleStatus.isWorkingTime 
-                    ? "bg-green-50 border border-green-200 text-green-700" 
-                    : "bg-orange-50 border border-orange-200 text-orange-700"
-                }`}>
-                  <div className={`h-2 w-2 rounded-full ${
-                    workingScheduleStatus.isWorkingTime ? "bg-green-500" : "bg-orange-500"
-                  }`} />
+                <div
+                  className={`p-2 rounded-md flex items-center gap-2 ${
+                    workingScheduleStatus.isWorkingTime
+                      ? "bg-green-50 border border-green-200 text-green-700"
+                      : "bg-orange-50 border border-orange-200 text-orange-700"
+                  }`}
+                >
+                  <div
+                    className={`h-2 w-2 rounded-full ${
+                      workingScheduleStatus.isWorkingTime
+                        ? "bg-green-500"
+                        : "bg-orange-500"
+                    }`}
+                  />
                   <span className="text-xs font-medium">
-                    {workingScheduleStatus.isWorkingTime ? "In working hours" : "Outside working hours"}
+                    {workingScheduleStatus.isWorkingTime
+                      ? "In working hours"
+                      : "Outside working hours"}
                   </span>
                   {!workingScheduleStatus.isWorkingTime && (
                     <AlertCircle className="h-3 w-3" />
@@ -298,21 +327,40 @@ export function CallControls({ onCallStatusUpdate }: CallControlsProps) {
           <CardContent>
             <div className="space-y-4">
               {/* Current Prospect Info - Always show if there's a prospect */}
-              {(currentCall || callQueue.length > 0 || callableProspects.length > 0) ? (
+              {currentCall ||
+              callQueue.length > 0 ||
+              callableProspects.length > 0 ? (
                 <div className="space-y-2">
                   <div className="font-medium">
-                    {currentProspect?.name || currentCall?.prospectName || callQueue[0]?.name || callableProspects[0]?.name || "Unknown"}
+                    {currentProspect?.name ||
+                      currentCall?.prospectName ||
+                      callQueue[0]?.name ||
+                      callableProspects[0]?.name ||
+                      "Unknown"}
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    Phone: {currentCall?.maskedPhone || maskPhoneNumber(currentProspect?.phone || callQueue[0]?.phone || callableProspects[0]?.phone || "")}
+                    Phone:{" "}
+                    {currentCall?.maskedPhone ||
+                      maskPhoneNumber(
+                        currentProspect?.phone ||
+                          callQueue[0]?.phone ||
+                          callableProspects[0]?.phone ||
+                          ""
+                      )}
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    Status: {currentProspect?.status || currentCall?.disposition || callableProspects[0]?.status || "Ready to call"}
+                    Status:{" "}
+                    {currentProspect?.status ||
+                      currentCall?.disposition ||
+                      callableProspects[0]?.status ||
+                      "Ready to call"}
                   </div>
                 </div>
               ) : (
                 <div className="text-center">
-                  <p className="text-muted-foreground">No prospects available for calling</p>
+                  <p className="text-muted-foreground">
+                    No prospects available for calling
+                  </p>
                   <p className="text-xs text-muted-foreground mt-1">
                     Check your filter settings or add new prospects
                   </p>
@@ -335,84 +383,111 @@ export function CallControls({ onCallStatusUpdate }: CallControlsProps) {
               {currentCall ? (
                 <div className="text-center p-2 bg-green-50 border border-green-200 rounded-md">
                   <p className="text-sm text-green-700">
-                    📞 {phoneSettings?.autoDialEnabled ? 'Auto-dialing' : 'Manual dial'}: {currentProspect?.phone || currentCall.prospectPhone}
+                    📞{" "}
+                    {phoneSettings?.autoDialEnabled
+                      ? "Auto-dialing"
+                      : "Manual dial"}
+                    : {currentProspect?.phone || currentCall.prospectPhone}
                   </p>
                   <p className="text-xs text-green-600 mt-1">
-                    {phoneSettings?.autoDialEnabled 
-                      ? 'Call should have opened automatically'
-                      : 'Please dial manually (Auto-dial disabled in settings)'
-                    }
+                    {phoneSettings?.autoDialEnabled
+                      ? "Call should have opened automatically"
+                      : "Please dial manually (Auto-dial disabled in settings)"}
                   </p>
                 </div>
-              ) : (callQueue.length > 0 || callableProspects.length > 0) ? (
-                <div className="text-center p-3 bg-blue-50 border border-blue-200 rounded-md">
-                  <p className="text-sm text-blue-700 font-medium">
-                    📞 Ready to Start Call
-                  </p>
-                  <p className="text-xs text-blue-600 mt-1">
-                    Choose a disposition to begin calling
-                  </p>
-                  {phoneSettings?.autoDialEnabled === false && (
-                    <p className="text-xs text-orange-600 mt-1">
-                      ⚠️ Auto-dial disabled - you'll need to dial manually
+              ) : callQueue.length > 0 || callableProspects.length > 0 ? (
+                <div className="space-y-3">
+                  <div className="text-center p-3 bg-blue-50 border border-blue-200 rounded-md">
+                    <p className="text-sm text-blue-700 font-medium">
+                      📞 Ready to Start Call
                     </p>
-                  )}
-                  {phoneSettings?.autoNextCall === false && (
-                    <p className="text-xs text-orange-600 mt-1">
-                      ⚠️ Auto-next call disabled - manual progression only
+                    <p className="text-xs text-blue-600 mt-1">
+                      Click "Start Phone" to begin calling
                     </p>
-                  )}
-                  {phoneSettings?.autoNextCall === true && (
-                    <p className="text-xs text-green-600 mt-1">
-                      ✅ Auto-next call enabled ({phoneSettings?.callDelaySeconds || 1}s delay)
-                    </p>
+                    {phoneSettings?.autoDialEnabled === false && (
+                      <p className="text-xs text-orange-600 mt-1">
+                        ⚠️ Auto-dial disabled - you'll need to dial manually
+                      </p>
+                    )}
+                    {phoneSettings?.autoNextCall === false && (
+                      <p className="text-xs text-orange-600 mt-1">
+                        ⚠️ Auto-next call disabled - manual progression only
+                      </p>
+                    )}
+                    {phoneSettings?.autoNextCall === true && (
+                      <p className="text-xs text-green-600 mt-1">
+                        ✅ Auto-next call enabled (
+                        {phoneSettings?.callDelaySeconds || 1}s delay)
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Start Phone Button - Show when session is active but no call in progress */}
+                  {!currentCall && (
+                    <Button
+                      onClick={handleStartPhone}
+                      disabled={
+                        loading || !workingScheduleStatus?.isWorkingTime
+                      }
+                      className="w-full bg-green-600 hover:bg-green-700"
+                    >
+                      <Phone className="mr-2 h-4 w-4" />
+                      {loading ? "Starting..." : "Start Phone"}
+                    </Button>
                   )}
                 </div>
               ) : null}
 
               {/* SOP 4: Call Disposition Buttons - Always show when session active and prospects available */}
-              {(currentCall || callQueue.length > 0 || callableProspects.length > 0) && getDispositionOptions().length > 0 && (
-                <div className="grid grid-cols-2 gap-2">
-                  {getDispositionOptions().map((disposition) => (
-                    <Button
-                      key={disposition.id}
-                      variant="outline"
-                      onClick={() => handleEndCall(disposition.id)}
-                      className={`border-2 hover:bg-opacity-10`}
-                      style={{
-                        borderColor: disposition.color,
-                        color: disposition.color,
-                      }}
-                    >
-                      {(disposition.name.toLowerCase().includes("converted") ||
-                        disposition.name
+              {(currentCall ||
+                callQueue.length > 0 ||
+                callableProspects.length > 0) &&
+                getDispositionOptions().length > 0 && (
+                  <div className="grid grid-cols-2 gap-2">
+                    {getDispositionOptions().map((disposition) => (
+                      <Button
+                        key={disposition.id}
+                        variant="outline"
+                        onClick={() => handleEndCall(disposition.id)}
+                        className={`border-2 hover:bg-opacity-10`}
+                        style={{
+                          borderColor: disposition.color,
+                          color: disposition.color,
+                        }}
+                      >
+                        {(disposition.name
                           .toLowerCase()
-                          .includes("qualified")) && (
-                        <CheckCircle className="mr-2 h-4 w-4" />
-                      )}
-                      {(disposition.name.toLowerCase().includes("not") ||
-                        disposition.name
+                          .includes("converted") ||
+                          disposition.name
+                            .toLowerCase()
+                            .includes("qualified")) && (
+                          <CheckCircle className="mr-2 h-4 w-4" />
+                        )}
+                        {(disposition.name.toLowerCase().includes("not") ||
+                          disposition.name
+                            .toLowerCase()
+                            .includes("rejected")) && (
+                          <XCircle className="mr-2 h-4 w-4" />
+                        )}
+                        {disposition.name
                           .toLowerCase()
-                          .includes("rejected")) && (
-                        <XCircle className="mr-2 h-4 w-4" />
-                      )}
-                      {disposition.name.toLowerCase().includes("contacted") && (
-                        <Phone className="mr-2 h-4 w-4" />
-                      )}
-                      {disposition.name
-                        .toLowerCase()
-                        .includes("interested") && (
-                        <Users className="mr-2 h-4 w-4" />
-                      )}
-                      {(disposition.name.toLowerCase().includes("new") ||
-                        disposition.name.toLowerCase().includes("lead")) && (
-                        <Timer className="mr-2 h-4 w-4" />
-                      )}
-                      {disposition.name}
-                    </Button>
-                  ))}
-                </div>
-              )}
+                          .includes("contacted") && (
+                          <Phone className="mr-2 h-4 w-4" />
+                        )}
+                        {disposition.name
+                          .toLowerCase()
+                          .includes("interested") && (
+                          <Users className="mr-2 h-4 w-4" />
+                        )}
+                        {(disposition.name.toLowerCase().includes("new") ||
+                          disposition.name.toLowerCase().includes("lead")) && (
+                          <Timer className="mr-2 h-4 w-4" />
+                        )}
+                        {disposition.name}
+                      </Button>
+                    ))}
+                  </div>
+                )}
             </div>
           </CardContent>
         </Card>
