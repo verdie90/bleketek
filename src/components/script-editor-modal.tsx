@@ -106,7 +106,6 @@ export function ScriptEditorModal({
         alert(result.error || "Failed to save script");
       }
     } catch (error) {
-      console.error("Save error:", error);
       alert("Failed to save script");
     } finally {
       setSaving(false);

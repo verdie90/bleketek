@@ -80,7 +80,6 @@ export function useCallLogs() {
       })) as User[];
       setUsers(usersData);
     } catch (err: any) {
-      console.error("Error loading users:", err);
     }
   }, []);
 
@@ -95,7 +94,6 @@ export function useCallLogs() {
       })) as Prospect[];
       setProspects(prospectsData);
     } catch (err: any) {
-      console.error("Error loading prospects:", err);
     }
   }, []);
 
@@ -118,7 +116,6 @@ export function useCallLogs() {
         setLoading(false);
       },
       (err) => {
-        console.error("Error loading call logs:", err);
         setError(err.message);
         setLoading(false);
       }
@@ -148,7 +145,6 @@ export function useCallLogs() {
         await addDoc(collection(db, "call_logs"), newCallLog);
         return { success: true };
       } catch (err: any) {
-        console.error("Error adding call log:", err);
         return { success: false, error: err.message };
       }
     },
@@ -165,7 +161,6 @@ export function useCallLogs() {
       });
       return { success: true };
     } catch (err: any) {
-      console.error("Error updating call log:", err);
       return { success: false, error: err.message };
     }
   }, []);
@@ -176,7 +171,6 @@ export function useCallLogs() {
       await deleteDoc(doc(db, "call_logs", id));
       return { success: true };
     } catch (err: any) {
-      console.error("Error deleting call log:", err);
       return { success: false, error: err.message };
     }
   }, []);

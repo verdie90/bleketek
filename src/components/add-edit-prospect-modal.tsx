@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -45,31 +45,48 @@ export function AddEditProspectModal({
     useTelemarketingSettings();
   const { users } = useUserManagement();
 
-  // Get database options
-  const sourceOptions = getActiveProspectSources().map((source) => ({
-    value: source.id!,
-    label: source.name,
-  }));
+  // Get database options - memoized to prevent infinite loops
+  const sourceOptions = useMemo(
+    () =>
+      getActiveProspectSources()
+        .filter((source) => source.id && source.id.trim() !== "")
+        .map((source) => ({
+          value: source.id!,
+          label: source.name,
+        })),
+    [getActiveProspectSources]
+  );
 
-  const statusOptions = getActiveProspectStatuses().map((status) => ({
-    value: status.id!,
-    label: status.name,
-  }));
+  const statusOptions = useMemo(
+    () =>
+      getActiveProspectStatuses()
+        .filter((status) => status.id && status.id.trim() !== "")
+        .map((status) => ({
+          value: status.id!,
+          label: status.name,
+        })),
+    [getActiveProspectStatuses]
+  );
 
-  const assignedToOptions = users
-    .filter((user) => user.isActive)
-    .map((user) => ({
+  const assignedToOptions = useMemo(() => {
+    const activeUsers = users.filter(
+      (user) => user.isActive && user.id && user.id.trim() !== ""
+    );
+    console.log("👥 Active users for assignment options:", activeUsers);
+
+    return activeUsers.map((user) => ({
       value: user.id!,
-      label: user.displayName,
+      label: user.displayName || user.email || user.id!,
     }));
+  }, [users]);
 
   const [formData, setFormData] = useState({
     name: "",
     phone: "",
     phoneNumber: "",
-    status: statusOptions[0]?.value || "new",
-    source: sourceOptions[0]?.value || "manual",
-    assignedTo: "",
+    status: "temp-default", // Will be updated in useEffect
+    source: "temp-default", // Will be updated in useEffect
+    assignedTo: "unassigned",
     tags: [] as string[],
     notes: "",
   });
@@ -79,14 +96,58 @@ export function AddEditProspectModal({
   // Reset form when modal opens/closes or prospect changes
   useEffect(() => {
     if (open) {
+      // Get safe default values
+      const defaultStatus =
+        statusOptions.find((s) => s.value && s.value.trim() !== "")?.value ||
+        "temp-default";
+      const defaultSource =
+        sourceOptions.find((s) => s.value && s.value.trim() !== "")?.value ||
+        "temp-default";
+
       if (prospect) {
+        console.log("📝 Editing prospect:", {
+          name: prospect.name,
+          assignedTo: prospect.assignedTo,
+          assignedToType: typeof prospect.assignedTo,
+        });
+        console.log("👥 Available assignment options:", assignedToOptions);
+
         // Find IDs from names for form controls
         const statusId =
           statusOptions.find((s) => s.label === prospect.status)?.value ||
-          prospect.status;
+          defaultStatus;
         const sourceId =
           sourceOptions.find((s) => s.label === prospect.source)?.value ||
-          prospect.source;
+          defaultSource;
+
+        // For assignedTo, check if the user still exists in the active users list
+        let assignedToValue = prospect.assignedTo || "unassigned";
+        console.log("🔍 Processing assignedTo:", {
+          original: prospect.assignedTo,
+          processed: assignedToValue,
+        });
+
+        if (assignedToValue && assignedToValue !== "unassigned") {
+          const userExists = assignedToOptions.find(
+            (u) => u.value === assignedToValue
+          );
+          console.log("👤 User lookup result:", {
+            searchId: assignedToValue,
+            found: userExists,
+            options: assignedToOptions.map((o) => ({
+              value: o.value,
+              label: o.label,
+            })),
+          });
+
+          if (!userExists) {
+            console.warn(
+              "⚠️ Assigned user not found in active users:",
+              assignedToValue
+            );
+            assignedToValue = "unassigned"; // Reset to unassigned if user doesn't exist
+          }
+        }
 
         setFormData({
           name: prospect.name,
@@ -94,25 +155,31 @@ export function AddEditProspectModal({
           phoneNumber: prospect.phoneNumber || prospect.phone,
           status: statusId,
           source: sourceId,
-          assignedTo: prospect.assignedTo || "",
+          assignedTo: assignedToValue,
           tags: [...prospect.tags],
           notes: prospect.notes || "",
+        });
+
+        console.log("📋 Form data set:", {
+          assignedTo: assignedToValue,
+          statusId,
+          sourceId,
         });
       } else {
         setFormData({
           name: "",
           phone: "",
           phoneNumber: "",
-          status: statusOptions[0]?.value || "new",
-          source: sourceOptions[0]?.value || "manual",
-          assignedTo: "",
+          status: defaultStatus,
+          source: defaultSource,
+          assignedTo: "unassigned",
           tags: [],
           notes: "",
         });
       }
     }
     setNewTag("");
-  }, [open, prospect, statusOptions, sourceOptions]);
+  }, [open, prospect, statusOptions, sourceOptions, assignedToOptions]);
 
   const addTag = () => {
     if (newTag.trim() && !formData.tags.includes(newTag.trim())) {
@@ -148,8 +215,20 @@ export function AddEditProspectModal({
         (s) => s.value === formData.source
       );
 
+      // Convert 'unassigned' to empty string for backend compatibility
+      const assignedToValue =
+        formData.assignedTo === "unassigned" ? "" : formData.assignedTo;
+
+      console.log("💾 Saving prospect data:", {
+        formAssignedTo: formData.assignedTo,
+        finalAssignedTo: assignedToValue,
+        selectedStatus: selectedStatus,
+        selectedSource: selectedSource,
+      });
+
       const prospectData = {
         ...formData,
+        assignedTo: assignedToValue,
         phone: formData.phoneNumber, // Ensure both phone and phoneNumber are set
         status: selectedStatus ? selectedStatus.label : formData.status, // Save name, not ID
         source: selectedSource ? selectedSource.label : formData.source, // Save name, not ID
@@ -162,7 +241,6 @@ export function AddEditProspectModal({
         alert(`Error: ${result.error}`);
       }
     } catch (error) {
-      console.error("Save error:", error);
       alert("An error occurred while saving");
     } finally {
       setSaving(false);
@@ -170,13 +248,21 @@ export function AddEditProspectModal({
   };
 
   const handleClose = () => {
+    // Get safe default values
+    const defaultStatus =
+      statusOptions.find((s) => s.value && s.value.trim() !== "")?.value ||
+      "temp-default";
+    const defaultSource =
+      sourceOptions.find((s) => s.value && s.value.trim() !== "")?.value ||
+      "temp-default";
+
     setFormData({
       name: "",
       phone: "",
       phoneNumber: "",
-      status: statusOptions[0]?.value || "new",
-      source: sourceOptions[0]?.value || "manual",
-      assignedTo: "",
+      status: defaultStatus,
+      source: defaultSource,
+      assignedTo: "unassigned",
       tags: [],
       notes: "",
     });
@@ -230,7 +316,11 @@ export function AddEditProspectModal({
             <div>
               <Label htmlFor="status">Status</Label>
               <Select
-                value={formData.status}
+                value={
+                  statusOptions.some((o) => o.value === formData.status)
+                    ? formData.status
+                    : statusOptions[0]?.value || ""
+                }
                 onValueChange={(value) =>
                   setFormData({
                     ...formData,
@@ -254,7 +344,11 @@ export function AddEditProspectModal({
             <div>
               <Label htmlFor="source">Source</Label>
               <Select
-                value={formData.source}
+                value={
+                  sourceOptions.some((o) => o.value === formData.source)
+                    ? formData.source
+                    : sourceOptions[0]?.value || ""
+                }
                 onValueChange={(value) =>
                   setFormData({
                     ...formData,
@@ -279,7 +373,13 @@ export function AddEditProspectModal({
           <div>
             <Label htmlFor="assignedTo">Assigned To</Label>
             <Select
-              value={formData.assignedTo}
+              value={
+                assignedToOptions.some(
+                  (o) => o.value === formData.assignedTo
+                ) || formData.assignedTo === "unassigned"
+                  ? formData.assignedTo
+                  : "unassigned"
+              }
               onValueChange={(value) =>
                 setFormData({ ...formData, assignedTo: value })
               }
@@ -288,7 +388,7 @@ export function AddEditProspectModal({
                 <SelectValue placeholder="Select user (optional)" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Unassigned</SelectItem>
+                <SelectItem value="unassigned">Unassigned</SelectItem>
                 {assignedToOptions.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
                     {option.label}

@@ -76,7 +76,6 @@ export const useRichEditor = (
       await navigator.clipboard.writeText(htmlContent);
       return true;
     } catch (error) {
-      console.error("Failed to copy to clipboard:", error);
       return false;
     }
   }, [htmlContent]);

@@ -7,7 +7,7 @@ export interface User {
   id?: string;
   username: string;
   email: string;
-  fullName: string;
+  displayName: string;
   role: string;
   isActive: boolean;
   lastLogin?: Timestamp;
@@ -69,7 +69,6 @@ export function useAuth() {
 
       // Check if response is ok
       if (!response.ok) {
-        console.error("Verify token failed:", response.status);
         logout();
         return;
       }
@@ -77,7 +76,6 @@ export function useAuth() {
       // Check if response is JSON
       const contentType = response.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) {
-        console.error("Non-JSON response from verify endpoint");
         logout();
         return;
       }
@@ -95,7 +93,6 @@ export function useAuth() {
         logout();
       }
     } catch (error) {
-      console.error("Token verification error:", error);
       logout();
     }
   };
@@ -106,8 +103,6 @@ export function useAuth() {
       try {
         setAuthState((prev) => ({ ...prev, isLoading: true, error: null }));
 
-        console.log("Attempting login with:", { email: credentials.email });
-
         const response = await fetch("/api/auth/login", {
           method: "POST",
           headers: {
@@ -116,13 +111,9 @@ export function useAuth() {
           body: JSON.stringify(credentials),
         });
 
-        console.log("Response status:", response.status);
-        console.log("Response headers:", response.headers);
-
         // Check if response is ok
         if (!response.ok) {
           const errorText = await response.text();
-          console.error("API Error:", errorText);
           const errorMessage = `Server error: ${response.status}`;
           setAuthState((prev) => ({
             ...prev,
@@ -136,7 +127,6 @@ export function useAuth() {
         const contentType = response.headers.get("content-type");
         if (!contentType || !contentType.includes("application/json")) {
           const responseText = await response.text();
-          console.error("Non-JSON response:", responseText);
           const errorMessage = "Server returned invalid response";
           setAuthState((prev) => ({
             ...prev,
@@ -147,7 +137,6 @@ export function useAuth() {
         }
 
         const data = await response.json();
-        console.log("Response data:", data);
 
         if (data.success) {
           // Store JWT token
@@ -171,7 +160,6 @@ export function useAuth() {
           return { success: false, error: data.error };
         }
       } catch (error) {
-        console.error("Login error:", error);
         const errorMessage =
           error instanceof Error ? error.message : "Login failed";
         setAuthState((prev) => ({

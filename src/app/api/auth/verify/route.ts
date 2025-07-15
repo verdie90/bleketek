@@ -55,7 +55,6 @@ export async function POST(request: NextRequest) {
       user: userResponse,
     });
   } catch (error) {
-    console.error("Token verification error:", error);
     return NextResponse.json(
       { success: false, error: "Terjadi kesalahan server" },
       { status: 500 }

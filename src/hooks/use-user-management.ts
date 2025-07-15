@@ -75,7 +75,6 @@ export function useUserManagement() {
 
       setUsers(usersData);
     } catch (err) {
-      console.error("Error loading users:", err);
       setError("Failed to load users");
     } finally {
       setLoading(false);
@@ -107,7 +106,6 @@ export function useUserManagement() {
 
       setUserActivities(activitiesData);
     } catch (err) {
-      console.error("Error loading user activities:", err);
     }
   };
 
@@ -144,7 +142,6 @@ export function useUserManagement() {
       await loadUsers();
       return { success: true, uid: docRef.id };
     } catch (err: any) {
-      console.error("Error creating user:", err);
       return { success: false, error: err.message || "Failed to create user" };
     }
   };
@@ -171,7 +168,6 @@ export function useUserManagement() {
       await loadUsers();
       return { success: true };
     } catch (err: any) {
-      console.error("Error updating user:", err);
       return { success: false, error: err.message || "Failed to update user" };
     }
   };
@@ -198,7 +194,6 @@ export function useUserManagement() {
       await loadUsers();
       return { success: true };
     } catch (err: any) {
-      console.error("Error deleting user:", err);
       return { success: false, error: err.message || "Failed to delete user" };
     }
   };
@@ -228,7 +223,6 @@ export function useUserManagement() {
       await loadUsers();
       return { success: true };
     } catch (err: any) {
-      console.error("Error toggling user status:", err);
       return {
         success: false,
         error: err.message || "Failed to toggle user status",
@@ -241,7 +235,6 @@ export function useUserManagement() {
     try {
       // In a real implementation, you would send an email here
       // For now, we'll just log the action
-      console.log(`Password reset requested for: ${email}`);
 
       // Log activity
       const user = users.find((u) => u.email === email);
@@ -256,7 +249,6 @@ export function useUserManagement() {
 
       return { success: true };
     } catch (err: any) {
-      console.error("Error sending password reset:", err);
       return {
         success: false,
         error: err.message || "Failed to send password reset email",
@@ -282,7 +274,6 @@ export function useUserManagement() {
         userAgent: navigator.userAgent,
       });
     } catch (err) {
-      console.error("Error logging user activity:", err);
     }
   };
 
@@ -339,7 +330,6 @@ export function useUserManagement() {
         setUsers(usersData);
       },
       (err) => {
-        console.error("Error listening to users:", err);
         setError("Failed to sync users");
       }
     );
@@ -355,7 +345,6 @@ export function useUserManagement() {
         setUserActivities(activitiesData);
       },
       (err) => {
-        console.error("Error listening to user activities:", err);
       }
     );
 

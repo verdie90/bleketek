@@ -114,7 +114,6 @@ export function useFirebaseManagement() {
         setDbSettings(settingsDoc.data() as DatabaseSettings);
       }
     } catch (err) {
-      console.error("Error loading Firebase data:", err);
       setError("Failed to load Firebase data");
     } finally {
       setLoading(false);
@@ -135,7 +134,6 @@ export function useFirebaseManagement() {
       await loadData();
       return { success: true };
     } catch (err) {
-      console.error("Error creating config:", err);
       return { success: false, error: "Failed to create config" };
     }
   };
@@ -152,7 +150,6 @@ export function useFirebaseManagement() {
       await loadData();
       return { success: true };
     } catch (err) {
-      console.error("Error updating config:", err);
       return { success: false, error: "Failed to update config" };
     }
   };
@@ -163,7 +160,6 @@ export function useFirebaseManagement() {
       await loadData();
       return { success: true };
     } catch (err) {
-      console.error("Error deleting config:", err);
       return { success: false, error: "Failed to delete config" };
     }
   };
@@ -182,7 +178,6 @@ export function useFirebaseManagement() {
       await loadData();
       return { success: true };
     } catch (err) {
-      console.error("Error creating collection:", err);
       return { success: false, error: "Failed to create collection" };
     }
   };
@@ -199,7 +194,6 @@ export function useFirebaseManagement() {
       await loadData();
       return { success: true };
     } catch (err) {
-      console.error("Error updating collection:", err);
       return { success: false, error: "Failed to update collection" };
     }
   };
@@ -210,7 +204,6 @@ export function useFirebaseManagement() {
       await loadData();
       return { success: true };
     } catch (err) {
-      console.error("Error deleting collection:", err);
       return { success: false, error: "Failed to delete collection" };
     }
   };
@@ -222,7 +215,6 @@ export function useFirebaseManagement() {
       setDbSettings(settings);
       return { success: true };
     } catch (err) {
-      console.error("Error updating database settings:", err);
       return { success: false, error: "Failed to update database settings" };
     }
   };
@@ -233,7 +225,6 @@ export function useFirebaseManagement() {
       await getDoc(doc(db, "test", "connection"));
       return { success: true, status: "connected" };
     } catch (err) {
-      console.error("Connection test failed:", err);
       return {
         success: false,
         status: "disconnected",
@@ -256,7 +247,6 @@ export function useFirebaseManagement() {
         setConfigs(configsData);
       },
       (err) => {
-        console.error("Error listening to configs:", err);
         setError("Failed to sync configs");
       }
     );
@@ -276,7 +266,6 @@ export function useFirebaseManagement() {
         setCollections(collectionsData);
       },
       (err) => {
-        console.error("Error listening to collections:", err);
         setError("Failed to sync collections");
       }
     );
@@ -289,7 +278,6 @@ export function useFirebaseManagement() {
         }
       },
       (err) => {
-        console.error("Error listening to settings:", err);
         setError("Failed to sync settings");
       }
     );

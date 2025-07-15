@@ -173,7 +173,6 @@ export default function FirebaseSettingsContent() {
       await getDoc(doc(db, "test", "connection"));
       setConnectionStatus("connected");
     } catch (error) {
-      console.error("Connection test failed:", error);
       setConnectionStatus("disconnected");
     }
   };
@@ -217,7 +216,6 @@ export default function FirebaseSettingsContent() {
         );
       }
     } catch (error) {
-      console.error("Error loading data:", error);
       toast.error("Gagal memuat data Firebase");
     } finally {
       setLoading(false);
@@ -250,7 +248,6 @@ export default function FirebaseSettingsContent() {
       setIsConfigDialogOpen(false);
       setEditingConfig(null);
     } catch (error) {
-      console.error("Error saving config:", error);
       toast.error("Gagal menyimpan konfigurasi");
     } finally {
       setSaving(false);
@@ -263,7 +260,6 @@ export default function FirebaseSettingsContent() {
       toast.success("Konfigurasi berhasil dihapus");
       loadData();
     } catch (error) {
-      console.error("Error deleting config:", error);
       toast.error("Gagal menghapus konfigurasi");
     }
   };
@@ -294,7 +290,6 @@ export default function FirebaseSettingsContent() {
       setIsCollectionDialogOpen(false);
       setEditingCollection(null);
     } catch (error) {
-      console.error("Error saving collection:", error);
       toast.error("Gagal menyimpan collection");
     } finally {
       setSaving(false);
@@ -307,7 +302,6 @@ export default function FirebaseSettingsContent() {
       toast.success("Collection berhasil dihapus");
       loadData();
     } catch (error) {
-      console.error("Error deleting collection:", error);
       toast.error("Gagal menghapus collection");
     }
   };
@@ -318,7 +312,6 @@ export default function FirebaseSettingsContent() {
       await setDoc(doc(db, "firebase_settings", "database"), dbSettings);
       toast.success("Pengaturan database berhasil disimpan");
     } catch (error) {
-      console.error("Error saving database settings:", error);
       toast.error("Gagal menyimpan pengaturan database");
     } finally {
       setSaving(false);

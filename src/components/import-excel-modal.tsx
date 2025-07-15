@@ -120,7 +120,6 @@ export function ImportExcelModal({
 
         setImportData(processed);
       } catch (error) {
-        console.error("Error reading Excel file:", error);
         alert("Error reading Excel file. Please check the format.");
       }
     };
@@ -181,7 +180,6 @@ export function ImportExcelModal({
         alert(`Import failed: ${result.error}`);
       }
     } catch (error) {
-      console.error("Import error:", error);
       alert("Import failed. Please try again.");
     } finally {
       setImporting(false);

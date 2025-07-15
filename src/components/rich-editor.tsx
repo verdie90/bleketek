@@ -168,9 +168,7 @@ const RichEditor: React.FC<RichEditorProps> = ({
     const html = editor.getHTML();
     try {
       await navigator.clipboard.writeText(html);
-      console.log("HTML copied to clipboard!");
     } catch (err) {
-      console.error("Failed to copy: ", err);
     }
   }, [editor]);
 

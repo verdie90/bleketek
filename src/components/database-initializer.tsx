@@ -45,7 +45,6 @@ export function DatabaseInitializer() {
       }
     } catch (error) {
       toast.error("Terjadi kesalahan saat inisialisasi database");
-      console.error("Database initialization error:", error);
     } finally {
       setIsInitializing(false);
     }

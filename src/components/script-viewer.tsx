@@ -62,7 +62,6 @@ export function ScriptViewer({ currentProspect }: ScriptViewerProps) {
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
       } catch (err) {
-        console.error("Failed to copy script:", err);
       }
     }
   };

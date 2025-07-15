@@ -265,7 +265,6 @@ export function useRoles() {
 
       setRoles(rolesList);
     } catch (err) {
-      console.error("Error loading roles:", err);
       setError(err instanceof Error ? err.message : "Failed to load roles");
     } finally {
       setLoading(false);
@@ -287,7 +286,6 @@ export function useRoles() {
         setLoading(false);
       },
       (err) => {
-        console.error("Error in roles listener:", err);
         setError(err.message);
         setLoading(false);
       }
@@ -309,7 +307,6 @@ export function useRoles() {
 
       return { success: true, id: docRef.id };
     } catch (err) {
-      console.error("Error creating role:", err);
       return {
         success: false,
         error: err instanceof Error ? err.message : "Failed to create role",
@@ -328,7 +325,6 @@ export function useRoles() {
 
       return { success: true };
     } catch (err) {
-      console.error("Error updating role:", err);
       return {
         success: false,
         error: err instanceof Error ? err.message : "Failed to update role",
@@ -363,7 +359,6 @@ export function useRoles() {
 
       return { success: true };
     } catch (err) {
-      console.error("Error deleting role:", err);
       return {
         success: false,
         error: err instanceof Error ? err.message : "Failed to delete role",
@@ -564,7 +559,6 @@ export function useRoles() {
 
       return { success: true };
     } catch (err) {
-      console.error("Error initializing default roles:", err);
       return {
         success: false,
         error:

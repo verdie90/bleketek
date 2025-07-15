@@ -168,7 +168,6 @@ export function useTelemarketingSettings() {
 
       setActivities(activitiesData);
     } catch (err) {
-      console.error("Error loading telemarketing settings:", err);
       setError("Failed to load telemarketing settings");
     } finally {
       setLoading(false);
@@ -246,7 +245,6 @@ export function useTelemarketingSettings() {
         timestamp: Timestamp.fromDate(new Date()),
       });
     } catch (error) {
-      console.error("Error logging activity:", error);
     }
   };
 
@@ -273,7 +271,6 @@ export function useTelemarketingSettings() {
 
       return { success: true, id: docRef.id };
     } catch (error) {
-      console.error("Error creating prospect source:", error);
       return { success: false, error: "Failed to create prospect source" };
     }
   };
@@ -301,7 +298,6 @@ export function useTelemarketingSettings() {
 
       return { success: true };
     } catch (error) {
-      console.error("Error updating prospect source:", error);
       return { success: false, error: "Failed to update prospect source" };
     }
   };
@@ -323,7 +319,6 @@ export function useTelemarketingSettings() {
 
       return { success: true };
     } catch (error) {
-      console.error("Error deleting prospect source:", error);
       return { success: false, error: "Failed to delete prospect source" };
     }
   };
@@ -351,7 +346,6 @@ export function useTelemarketingSettings() {
 
       return { success: true, id: docRef.id };
     } catch (error) {
-      console.error("Error creating prospect status:", error);
       return { success: false, error: "Failed to create prospect status" };
     }
   };
@@ -379,7 +373,6 @@ export function useTelemarketingSettings() {
 
       return { success: true };
     } catch (error) {
-      console.error("Error updating prospect status:", error);
       return { success: false, error: "Failed to update prospect status" };
     }
   };
@@ -401,7 +394,6 @@ export function useTelemarketingSettings() {
 
       return { success: true };
     } catch (error) {
-      console.error("Error deleting prospect status:", error);
       return { success: false, error: "Failed to delete prospect status" };
     }
   };
@@ -451,7 +443,6 @@ export function useTelemarketingSettings() {
         return { success: true, id: docRef.id };
       }
     } catch (error) {
-      console.error("Error saving phone settings:", error);
       return { success: false, error: "Failed to save phone settings" };
     }
   };
@@ -635,7 +626,6 @@ export function useTelemarketingSettings() {
 
       return { success: true };
     } catch (error) {
-      console.error("Error initializing default data:", error);
       return { success: false, error: "Failed to initialize default data" };
     }
   };

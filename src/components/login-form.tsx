@@ -47,7 +47,7 @@ export function LoginForm({
 
       if (result.success) {
         toast.success(
-          `Selamat datang, ${result.user?.fullName || credentials.email}!`
+          `Selamat datang, ${result.user?.displayName || credentials.email}!`
         );
         onLoginSuccess?.();
       } else {

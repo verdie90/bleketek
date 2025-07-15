@@ -101,7 +101,7 @@ export default function UserManagement() {
   const [userForm, setUserForm] = useState<CreateUserData>({
     username: "",
     email: "",
-    fullName: "",
+    displayName: "",
     password: "",
     role: "",
     isActive: true,
@@ -114,7 +114,7 @@ export default function UserManagement() {
     setUserForm({
       username: "",
       email: "",
-      fullName: "",
+      displayName: "",
       password: "",
       role: "",
       isActive: true,
@@ -138,7 +138,7 @@ export default function UserManagement() {
         return;
       }
 
-      if (!userForm.fullName.trim()) {
+      if (!userForm.displayName.trim()) {
         toast.error("Nama lengkap harus diisi");
         return;
       }
@@ -233,7 +233,7 @@ export default function UserManagement() {
     setUserForm({
       username: user.username,
       email: user.email,
-      fullName: user.fullName,
+      displayName: user.displayName,
       password: "", // Don't show existing password
       role: user.role,
       isActive: user.isActive,
@@ -330,12 +330,12 @@ export default function UserManagement() {
                 </div>
 
                 <div className="grid gap-2">
-                  <Label htmlFor="fullName">Nama Lengkap</Label>
+                  <Label htmlFor="displayName">Nama Lengkap</Label>
                   <Input
-                    id="fullName"
-                    value={userForm.fullName}
+                    id="displayName"
+                    value={userForm.displayName}
                     onChange={(e) =>
-                      setUserForm({ ...userForm, fullName: e.target.value })
+                      setUserForm({ ...userForm, displayName: e.target.value })
                     }
                     placeholder="Masukkan nama lengkap"
                   />
@@ -491,7 +491,7 @@ export default function UserManagement() {
               {filteredUsers.map((user) => (
                 <TableRow key={user.id}>
                   <TableCell className="font-medium">{user.username}</TableCell>
-                  <TableCell>{user.fullName}</TableCell>
+                  <TableCell>{user.displayName}</TableCell>
                   <TableCell>{user.email}</TableCell>
                   <TableCell>
                     <Badge variant="outline">{user.role}</Badge>
@@ -538,7 +538,7 @@ export default function UserManagement() {
                               <AlertDialogTitle>Delete User</AlertDialogTitle>
                               <AlertDialogDescription>
                                 Apakah Anda yakin ingin menghapus user "
-                                {user.fullName}"? Tindakan ini tidak dapat
+                                {user.displayName}"? Tindakan ini tidak dapat
                                 dibatalkan.
                               </AlertDialogDescription>
                             </AlertDialogHeader>

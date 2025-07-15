@@ -71,36 +71,25 @@ export function CallControls({ onCallStatusUpdate }: CallControlsProps) {
 
   const handleEndCall = async (dispositionId: string, notes?: string) => {
     try {
-      console.log("🔍 CallControls.handleEndCall triggered with:", {
-        dispositionId,
-        notes,
-        currentCall: currentCall?.id,
-        currentProspect: currentProspect?.id,
-        currentProspectName: currentProspect?.name,
-        callQueue: callQueue?.length,
-        callableProspects: callableProspects?.length
-      });
-      
+
       // Show info about auto dial status when processing disposition
       if (phoneSettings?.autoDialEnabled === false) {
-        console.log("⚠️ Processing disposition with auto-dial disabled");
+
       }
       
       if (phoneSettings?.autoNextCall === false) {
-        console.log("⚠️ Auto next call disabled in settings");
+
       }
-      
-      console.log("🔄 About to call endCall from useCallSession...");
+
       const result = await endCall(dispositionId, notes);
-      console.log("🔍 endCall result from useCallSession:", result);
-      
+
       if (!result.success) {
         console.error("❌ endCall failed:", result.error);
         alert(result.error || "Failed to process call disposition");
       } else {
-        console.log("✅ Call disposition processed successfully");
+
         if (phoneSettings?.autoNextCall) {
-          console.log(`🔄 Next call will start in ${phoneSettings?.callDelaySeconds || 1} seconds`);
+
         }
         onCallStatusUpdate?.(dispositionId, notes);
       }

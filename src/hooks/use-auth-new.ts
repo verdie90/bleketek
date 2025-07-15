@@ -7,7 +7,7 @@ export interface User {
   id?: string;
   username: string;
   email: string;
-  fullName: string;
+  displayName: string;
   role: string;
   isActive: boolean;
   lastLogin?: Timestamp;
@@ -80,7 +80,6 @@ export function useAuth() {
         logout();
       }
     } catch (error) {
-      console.error("Token verification error:", error);
       logout();
     }
   };

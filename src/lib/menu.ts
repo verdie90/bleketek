@@ -32,11 +32,7 @@ export const data = {
       url: "/dashboard",
       icon: LayoutDashboard,
     },
-    {
-      title: "User Management",
-      url: "/user-management",
-      icon: Users,
-    },
+    // User Management moved to Settings submenu
     {
       title: "Telemarketing",
       url: "#",
@@ -208,6 +204,7 @@ export const data = {
         {
           title: "User Management",
           url: "/settings/user-management",
+          icon: Users,
         },
         {
           title: "Telemarketing Settings",

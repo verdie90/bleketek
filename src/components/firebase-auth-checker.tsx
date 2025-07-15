@@ -58,7 +58,6 @@ export default function FirebaseAuthChecker() {
         toast.success("Firebase Authentication is working correctly");
       }
     } catch (error: any) {
-      console.error("Firebase Auth test error:", error);
 
       if (error.code === "auth/operation-not-allowed") {
         setAuthStatus("disabled");

@@ -22,7 +22,7 @@ import { hashPassword } from "@/lib/auth-utils";
 export interface CreateUserData {
   username: string;
   email: string;
-  fullName: string;
+  displayName: string;
   password?: string; // Make password optional for updates
   role: string;
   isActive: boolean;
@@ -59,7 +59,6 @@ export function useUsers() {
         setError(null);
       },
       (err) => {
-        console.error("Error loading users:", err);
         setError("Failed to load users");
         setLoading(false);
       }
@@ -119,7 +118,6 @@ export function useUsers() {
           },
         };
       } catch (err) {
-        console.error("Error creating user:", err);
         return {
           success: false,
           error: err instanceof Error ? err.message : "Failed to create user",
@@ -185,7 +183,6 @@ export function useUsers() {
 
         return { success: true };
       } catch (err) {
-        console.error("Error updating user:", err);
         return {
           success: false,
           error: err instanceof Error ? err.message : "Failed to update user",
@@ -204,7 +201,6 @@ export function useUsers() {
 
         return { success: true };
       } catch (err) {
-        console.error("Error deleting user:", err);
         return {
           success: false,
           error: err instanceof Error ? err.message : "Failed to delete user",
@@ -244,7 +240,7 @@ export function useUsers() {
       return users.filter(
         (user) =>
           user.username.toLowerCase().includes(term) ||
-          user.fullName.toLowerCase().includes(term) ||
+          user.displayName.toLowerCase().includes(term) ||
           user.email.toLowerCase().includes(term) ||
           user.role.toLowerCase().includes(term)
       );
@@ -268,7 +264,7 @@ export function useUsers() {
       const adminUser: CreateUserData = {
         username: "admin",
         email: "admin@company.com",
-        fullName: "System Administrator",
+        displayName: "System Administrator",
         password: "admin123", // Change this in production!
         role: "Administrator",
         isActive: true,
@@ -278,7 +274,6 @@ export function useUsers() {
 
       return await createUser(adminUser);
     } catch (error) {
-      console.error("Error creating default admin:", error);
       return {
         success: false,
         error: "Failed to create default admin user",

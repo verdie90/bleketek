@@ -37,7 +37,6 @@ export const verifyJWT = (token: string): JWTPayload | null => {
   try {
     return jwt.verify(token, JWT_SECRET) as JWTPayload;
   } catch (error) {
-    console.error("JWT verification failed:", error);
     return null;
   }
 };
@@ -46,7 +45,6 @@ export const decodeJWT = (token: string): JWTPayload | null => {
   try {
     return jwt.decode(token) as JWTPayload;
   } catch (error) {
-    console.error("JWT decode failed:", error);
     return null;
   }
 };

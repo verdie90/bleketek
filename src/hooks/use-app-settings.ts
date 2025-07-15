@@ -96,7 +96,6 @@ export function useAppSettings() {
         setError(null);
       },
       (error) => {
-        console.error("Error listening to settings:", error);
         setError("Failed to load settings");
         setLoading(false);
       }
@@ -112,7 +111,6 @@ export function useAppSettings() {
       await updateDoc(settingsRef, { ...updatedSettings });
       return true;
     } catch (error) {
-      console.error("Error updating settings:", error);
       setError("Failed to update settings");
       return false;
     }
@@ -136,7 +134,6 @@ export function useAppSettings() {
       await updateDoc(settingsRef, { ...newSettings });
       return true;
     } catch (error) {
-      console.error("Error updating setting:", error);
       setError("Failed to update setting");
       return false;
     }
@@ -148,7 +145,6 @@ export function useAppSettings() {
       await setDoc(settingsRef, defaultSettings);
       return true;
     } catch (error) {
-      console.error("Error resetting settings:", error);
       setError("Failed to reset settings");
       return false;
     }

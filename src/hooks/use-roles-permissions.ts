@@ -109,7 +109,6 @@ export function useRolesPermissions() {
       })) as UserRole[];
       setUserRoles(userRolesData);
     } catch (err) {
-      console.error("Error loading roles and permissions:", err);
       setError("Failed to load roles and permissions");
     } finally {
       setLoading(false);
@@ -130,7 +129,6 @@ export function useRolesPermissions() {
       await loadData();
       return { success: true };
     } catch (err) {
-      console.error("Error creating role:", err);
       return { success: false, error: "Failed to create role" };
     }
   };
@@ -144,7 +142,6 @@ export function useRolesPermissions() {
       await loadData();
       return { success: true };
     } catch (err) {
-      console.error("Error updating role:", err);
       return { success: false, error: "Failed to update role" };
     }
   };
@@ -166,7 +163,6 @@ export function useRolesPermissions() {
       await loadData();
       return { success: true };
     } catch (err) {
-      console.error("Error deleting role:", err);
       return { success: false, error: "Failed to delete role" };
     }
   };
@@ -185,7 +181,6 @@ export function useRolesPermissions() {
       await loadData();
       return { success: true };
     } catch (err) {
-      console.error("Error creating permission:", err);
       return { success: false, error: "Failed to create permission" };
     }
   };
@@ -202,7 +197,6 @@ export function useRolesPermissions() {
       await loadData();
       return { success: true };
     } catch (err) {
-      console.error("Error updating permission:", err);
       return { success: false, error: "Failed to update permission" };
     }
   };
@@ -213,7 +207,6 @@ export function useRolesPermissions() {
       await loadData();
       return { success: true };
     } catch (err) {
-      console.error("Error deleting permission:", err);
       return { success: false, error: "Failed to delete permission" };
     }
   };
@@ -231,7 +224,6 @@ export function useRolesPermissions() {
       await loadData();
       return { success: true };
     } catch (err) {
-      console.error("Error assigning user role:", err);
       return { success: false, error: "Failed to assign user role" };
     }
   };
@@ -245,7 +237,6 @@ export function useRolesPermissions() {
       await loadData();
       return { success: true };
     } catch (err) {
-      console.error("Error updating user role:", err);
       return { success: false, error: "Failed to update user role" };
     }
   };
@@ -258,7 +249,6 @@ export function useRolesPermissions() {
       await loadData();
       return { success: true };
     } catch (err) {
-      console.error("Error revoking user role:", err);
       return { success: false, error: "Failed to revoke user role" };
     }
   };
@@ -269,7 +259,6 @@ export function useRolesPermissions() {
       await loadData();
       return { success: true };
     } catch (err) {
-      console.error("Error deleting user role:", err);
       return { success: false, error: "Failed to delete user role" };
     }
   };
@@ -287,7 +276,6 @@ export function useRolesPermissions() {
       await loadData();
       return { success: true };
     } catch (err) {
-      console.error("Error updating role permissions:", err);
       return { success: false, error: "Failed to update role permissions" };
     }
   };
@@ -360,7 +348,6 @@ export function useRolesPermissions() {
         setRoles(rolesData);
       },
       (err) => {
-        console.error("Error listening to roles:", err);
         setError("Failed to sync roles");
       }
     );
@@ -377,7 +364,6 @@ export function useRolesPermissions() {
         setPermissions(permissionsData);
       },
       (err) => {
-        console.error("Error listening to permissions:", err);
         setError("Failed to sync permissions");
       }
     );
@@ -394,7 +380,6 @@ export function useRolesPermissions() {
         setUserRoles(userRolesData);
       },
       (err) => {
-        console.error("Error listening to user roles:", err);
         setError("Failed to sync user roles");
       }
     );

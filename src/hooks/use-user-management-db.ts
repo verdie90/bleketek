@@ -77,7 +77,6 @@ export function useUserManagement() {
 
       setUsers(usersData);
     } catch (err) {
-      console.error("Error loading users:", err);
       setError("Failed to load users");
     } finally {
       setLoading(false);
@@ -109,7 +108,6 @@ export function useUserManagement() {
 
       setUserActivities(activitiesData);
     } catch (err) {
-      console.error("Error loading user activities:", err);
     }
   };
 
@@ -153,7 +151,6 @@ export function useUserManagement() {
 
       return { success: true, id: docRef.id };
     } catch (err) {
-      console.error("Error creating user:", err);
       return {
         success: false,
         error: err instanceof Error ? err.message : "Failed to create user",
@@ -187,7 +184,6 @@ export function useUserManagement() {
 
       return { success: true };
     } catch (err) {
-      console.error("Error updating user:", err);
       return {
         success: false,
         error: err instanceof Error ? err.message : "Failed to update user",
@@ -218,7 +214,6 @@ export function useUserManagement() {
 
       return { success: true };
     } catch (err) {
-      console.error("Error deleting user:", err);
       return {
         success: false,
         error: err instanceof Error ? err.message : "Failed to delete user",
@@ -255,7 +250,6 @@ export function useUserManagement() {
 
       return { success: true };
     } catch (err) {
-      console.error("Error toggling user status:", err);
       return {
         success: false,
         error:
@@ -293,7 +287,6 @@ export function useUserManagement() {
 
       return { success: true };
     } catch (err) {
-      console.error("Error resetting password:", err);
       return {
         success: false,
         error: err instanceof Error ? err.message : "Failed to reset password",
@@ -330,7 +323,6 @@ export function useUserManagement() {
 
       return { success: isValid, user: isValid ? user : null };
     } catch (err) {
-      console.error("Error verifying password:", err);
       return {
         success: false,
         error: err instanceof Error ? err.message : "Failed to verify password",
@@ -346,7 +338,6 @@ export function useUserManagement() {
         timestamp: activity.timestamp || serverTimestamp(),
       });
     } catch (err) {
-      console.error("Error logging user activity:", err);
     }
   };
 
@@ -400,7 +391,6 @@ export function useUserManagement() {
         setLoading(false);
       },
       (err) => {
-        console.error("Error in users listener:", err);
         setError(err.message);
         setLoading(false);
       }
@@ -418,7 +408,6 @@ export function useUserManagement() {
         setUserActivities(activitiesData);
       },
       (err) => {
-        console.error("Error in activities listener:", err);
       }
     );
 

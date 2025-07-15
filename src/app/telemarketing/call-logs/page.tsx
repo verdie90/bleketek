@@ -293,7 +293,6 @@ export default function CallLogsPage() {
             successCount++;
           } else {
             errorCount++;
-            console.error(`Failed to delete call log ${log.id}:`, result.error);
           }
         }
       }
@@ -311,7 +310,6 @@ export default function CallLogsPage() {
       setIsDeleteRangeModalOpen(false);
 
     } catch (error) {
-      console.error("Error deleting call logs:", error);
       alert("An error occurred while deleting call logs. Please try again.");
     } finally {
       setIsDeleting(false);

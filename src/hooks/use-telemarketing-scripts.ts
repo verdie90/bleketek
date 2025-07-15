@@ -69,7 +69,6 @@ export function useTelemarketingScripts() {
         setError(null);
       },
       (err) => {
-        console.error("Error fetching scripts:", err);
         setError("Failed to fetch scripts");
         setLoading(false);
       }
@@ -106,7 +105,6 @@ export function useTelemarketingScripts() {
         setLoading(false);
         return { success: true };
       } catch (err) {
-        console.error("Error adding script:", err);
         setLoading(false);
         return { success: false, error: "Failed to add script" };
       }
@@ -136,7 +134,6 @@ export function useTelemarketingScripts() {
         setLoading(false);
         return { success: true };
       } catch (err) {
-        console.error("Error updating script:", err);
         setLoading(false);
         return { success: false, error: "Failed to update script" };
       }
@@ -160,7 +157,6 @@ export function useTelemarketingScripts() {
         setLoading(false);
         return { success: true };
       } catch (err) {
-        console.error("Error deleting script:", err);
         setLoading(false);
         return { success: false, error: "Failed to delete script" };
       }
@@ -188,7 +184,6 @@ export function useTelemarketingScripts() {
 
         return { success: true };
       } catch (err) {
-        console.error("Error incrementing usage:", err);
         return { success: false, error: "Failed to update usage" };
       }
     },
