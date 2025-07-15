@@ -81,118 +81,313 @@ export interface ProspectFilters {
 export function useCallSession() {
   const { user } = useAuth();
   const { prospects, updateProspect } = useProspects();
-  const { getActiveProspectStatuses, getActiveProspectSources } =
+  const { getActiveProspectStatuses, getActiveProspectSources, phoneSettings } =
     useTelemarketingSettings();
 
+
   // Core session state
-  const [currentSession, setCurrentSession] = useState<CallSession | null>(
-    null
-  );
+  const [currentSession, setCurrentSession] = useState<CallSession | null>(null);
   const [currentCall, setCurrentCall] = useState<CallLog | null>(null);
   const [currentProspect, setCurrentProspect] = useState<Prospect | null>(null);
+  // Prospect filters - now loaded from phone settings
+  const [prospectFilters, setProspectFilters] = useState<ProspectFilters>({
+    statusName: phoneSettings?.defaultStatusFilter || "Baru", // Load from settings
+    sourceName: phoneSettings?.defaultSourceFilter || "Database", // Load from settings
+  });
+
 
   // Database-synced data
   const [callableProspects, setCallableProspects] = useState<Prospect[]>([]);
-  const [dispositionStatuses, setDispositionStatuses] = useState<
-    ProspectStatus[]
-  >([]);
+  const [dispositionStatuses, setDispositionStatuses] = useState<ProspectStatus[]>([]);
   const [callQueue, setCallQueue] = useState<Prospect[]>([]);
-
   // Timers
   const [sessionTimer, setSessionTimer] = useState(0);
   const [callTimer, setCallTimer] = useState(0);
   const [breakTimer, setBreakTimer] = useState(0);
-
   // UI state
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDataSynced, setIsDataSynced] = useState(false);
 
-  // Prospect filters
-  const [prospectFilters, setProspectFilters] = useState<ProspectFilters>({
-    statusName: "Baru", // Default status
-    sourceName: "Database", // Default source
-  });
-
   // Ref untuk menghindari infinite loop
   const lastProspectsLength = useRef(0);
   const isInitialized = useRef(false);
+  const prevFiltersRef = useRef(prospectFilters);
+  const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Mutex/Locking untuk mencegah race condition
+  const [isProcessingCall, setIsProcessingCall] = useState(false);
+  const isStartingNextCall = useRef(false);
+  const isEndingCall = useRef(false);
 
   // SOP 5: Helper functions menggunakan sumber database
 
   // SOP: Sinkronisasi semua data dari database
   const syncAllData = useCallback(async () => {
-    setIsDataSynced(false);
-
     try {
       // Get all active statuses and sources from database
       const statuses = getActiveProspectStatuses();
       const sources = getActiveProspectSources();
-      setDispositionStatuses(statuses);
+
+      // Auto-adjust filters if current values don't exist in available options
+      const currentStatusExists = statuses.some(s => s.name === prospectFilters.statusName);
+      const currentSourceExists = sources.some(s => s.name === prospectFilters.sourceName);
+
+      if (!currentStatusExists || !currentSourceExists) {
+        console.warn("🔄 Current filter values don't exist, auto-adjusting:", {
+          currentStatus: prospectFilters.statusName,
+          currentSource: prospectFilters.sourceName,
+          statusExists: currentStatusExists,
+          sourceExists: currentSourceExists,
+          availableStatuses: statuses.map(s => s.name),
+          availableSources: sources.map(s => s.name),
+        });
+
+        const newFilters = {
+          statusName: currentStatusExists ? prospectFilters.statusName : (statuses[0]?.name || "Baru"),
+          sourceName: currentSourceExists ? prospectFilters.sourceName : (sources[0]?.name || "Database"),
+        };
+
+        setProspectFilters(newFilters);
+        console.log("🔄 Auto-adjusted filters to:", newFilters);
+      }
+
+      // Only update disposition statuses if they've changed
+      if (JSON.stringify(statuses) !== JSON.stringify(dispositionStatuses)) {
+        setDispositionStatuses(statuses);
+        console.log("📊 Updated disposition statuses:", {
+          count: statuses.length,
+          statuses: statuses.map((s) => s.name),
+        });
+      }
 
       // Find selected source from telemarketing_prospect_sources collection
       const selectedSource = sources.find(
         (source) => source.name === prospectFilters.sourceName
       );
 
+      console.log("🔍 Source matching debug:", {
+        lookingFor: prospectFilters.sourceName,
+        availableSources: sources.map(s => s.name),
+        foundSource: selectedSource ? selectedSource.name : 'NOT FOUND'
+      });
+
       if (!selectedSource) {
         console.warn(
           `No '${prospectFilters.sourceName}' source found in telemarketing_prospect_sources`
         );
-        setCallableProspects([]);
-        setIsDataSynced(true);
-        return { prospects: [], statuses };
+        console.log("Available sources:", sources.map(s => ({ id: s.id, name: s.name })));
+
+
+        // Core session state
+        const [currentSession, setCurrentSession] = useState<CallSession | null>(
+          null
+        );
+        const [currentCall, setCurrentCall] = useState<CallLog | null>(null);
+        const [currentProspect, setCurrentProspect] = useState<Prospect | null>(null);
+
+        // Database-synced data
+        const [callableProspects, setCallableProspects] = useState<Prospect[]>([]);
+        const [dispositionStatuses, setDispositionStatuses] = useState<
+          ProspectStatus[]
+        >([]);
+        const [callQueue, setCallQueue] = useState<Prospect[]>([]);
+
+        // Timers
+        const [sessionTimer, setSessionTimer] = useState(0);
+        const [callTimer, setCallTimer] = useState(0);
+        const [breakTimer, setBreakTimer] = useState(0);
+
+        // UI state
+        const [loading, setLoading] = useState(false);
+        const [error, setError] = useState<string | null>(null);
+        const [isDataSynced, setIsDataSynced] = useState(false);
+
+        // (Removed duplicate prospectFilters declaration)
+
+        // Firestore listeners for session and call logs
+        useEffect(() => {
+          if (!user || !('uid' in user)) return;
+          setLoading(true);
+          // Listen for current session for this user
+          const sessionQuery = query(
+            collection(db, "call_sessions"),
+            where("userId", "==", (user as any).uid),
+            orderBy("startTime", "desc"),
+            limit(1)
+          );
+          const unsubscribeSession = onSnapshot(sessionQuery, (snapshot) => {
+            if (!snapshot.empty) {
+              const sessionData = snapshot.docs[0].data() as CallSession;
+              setCurrentSession({ ...sessionData, id: snapshot.docs[0].id });
+            } else {
+              setCurrentSession(null);
+            }
+            setLoading(false);
+          });
+          return () => unsubscribeSession();
+        }, [user]);
+
+        // Listen for current call log for this session
+        useEffect(() => {
+          if (!currentSession) return;
+          const callQuery = query(
+            collection(db, "call_logs"),
+            where("sessionId", "==", currentSession.id),
+            orderBy("startTime", "desc"),
+            limit(1)
+          );
+          const unsubscribeCall = onSnapshot(callQuery, (snapshot) => {
+            if (!snapshot.empty) {
+              const callData = snapshot.docs[0].data() as CallLog;
+              setCurrentCall({ ...callData, id: snapshot.docs[0].id });
+            } else {
+              setCurrentCall(null);
+            }
+          });
+          return () => unsubscribeCall();
+        }, [currentSession]);
+
+        // Listen for current prospect (the one being called)
+        useEffect(() => {
+          if (!currentCall) return;
+          const prospectId = currentCall.prospectId;
+          const prospectRef = doc(db, "prospects", prospectId);
+          const unsubscribeProspect = onSnapshot(prospectRef, (docSnap) => {
+            if (docSnap.exists()) {
+              setCurrentProspect({ ...docSnap.data(), id: docSnap.id } as Prospect);
+            } else {
+              setCurrentProspect(null);
+            }
+          });
+          return () => unsubscribeProspect();
+        }, [currentCall]);
+
+        // Listen for callable prospects (filtered by status/source/phone)
+        useEffect(() => {
+          // This logic is already handled in useProspects, so just filter here
+          // Optionally, you could move this to Firestore query for large datasets
+          // For now, keep as is for simplicity
+        }, []);
+
+        // Remove all debug and sync state logic for production
+
+        // ...existing code...
+
+        // Don't return early, continue with filtering using the sourceName directly
+        // This allows filtering even if the source isn't in the settings table
       }
 
-      // Filter prospects: berdasarkan filter yang dipilih user
-      const filtered = prospects.filter(
-        (prospect) =>
-          prospect.phone &&
-          prospect.status === prospectFilters.statusName &&
-          prospect.source === selectedSource.name
-      );
-
-      setCallableProspects(filtered);
-
-      // Enhanced logging for debugging
-      console.log("📋 Fetched callable prospects:", {
-        total: prospects.length,
-        callable: filtered.length,
-        criteria: `status=${prospectFilters.statusName}, source=${prospectFilters.sourceName} (from collection)`,
-        targetStatus: prospectFilters.statusName,
-        selectedSourceId: selectedSource.id,
-        breakdown: {
-          withPhone: prospects.filter((p) => p.phone).length,
-          statusMatch: prospects.filter(
-            (p) => p.status === prospectFilters.statusName
-          ).length,
-          sourceMatch: prospects.filter(
-            (p) => p.source === prospectFilters.sourceName
-          ).length,
-          bothConditions: prospects.filter(
-            (p) =>
-              p.status === prospectFilters.statusName &&
-              p.source === prospectFilters.sourceName
-          ).length,
+      // Enhanced debugging for prospects filtering
+      console.log("🔍 Detailed filtering debug:", {
+        totalProspects: prospects.length,
+        filterCriteria: {
+          statusName: prospectFilters.statusName,
+          sourceName: prospectFilters.sourceName,
         },
+        availableSources: sources.map(s => ({ id: s.id, name: s.name })),
+        selectedSource: selectedSource ? { id: selectedSource.id, name: selectedSource.name } : null,
+        prospectSamples: prospects.slice(0, 3).map(p => ({
+          id: p.id,
+          name: p.name,
+          phone: p.phone,
+          status: p.status,
+          source: p.source,
+        })),
       });
 
-      // Fetch statuses
-      setDispositionStatuses(statuses);
+      // Filter prospects: berdasarkan filter yang dipilih user
+      const filtered = prospects.filter((prospect) => {
+        // 1. Harus memiliki nomor telepon (check both phone and phoneNumber fields)
+        const hasPhone = Boolean(prospect.phone || prospect.phoneNumber);
 
-      console.log("📊 Fetched disposition statuses:", {
-        count: statuses.length,
-        statuses: statuses.map((s) => s.name),
+        // 2. Status harus sesuai dengan filter yang dipilih (with null safety)
+        const statusMatch = prospect.status && prospect.status === prospectFilters.statusName;
+
+        // 3. Source harus sesuai dengan filter yang dipilih (with null safety)
+        const sourceMatch = prospect.source && prospect.source === prospectFilters.sourceName;
+
+        const passed = hasPhone && statusMatch && sourceMatch;
+
+        // Log setiap prospect untuk debugging
+        if (prospects.indexOf(prospect) < 5) { // Log only first 5 for performance
+          console.log("🔍 Filtering prospect:", {
+            name: prospect.name,
+            hasPhone,
+            phoneValue: prospect.phone || prospect.phoneNumber || 'None',
+            statusMatch,
+            sourceMatch,
+            prospectStatus: prospect.status || 'null',
+            prospectSource: prospect.source || 'null',
+            targetStatus: prospectFilters.statusName,
+            targetSource: prospectFilters.sourceName,
+            passed,
+          });
+        }
+
+        return passed;
       });
 
-      setIsDataSynced(true);
-      console.log("✅ Data synchronization complete");
+      // Only update state if data has actually changed
+      const currentProspectsJson = JSON.stringify(callableProspects.map(p => p.id).sort());
+      const newProspectsJson = JSON.stringify(filtered.map(p => p.id).sort());
+
+      if (currentProspectsJson !== newProspectsJson) {
+        setCallableProspects(filtered);
+        console.log("📋 Updated callable prospects:", {
+          total: prospects.length,
+          callable: filtered.length,
+          criteria: `status=${prospectFilters.statusName}, source=${prospectFilters.sourceName} (from collection)`,
+          targetStatus: prospectFilters.statusName,
+          selectedSourceId: selectedSource?.id || 'unknown',
+          changed: true,
+          previousCount: callableProspects.length,
+          newCount: filtered.length,
+          breakdown: {
+            totalProspects: prospects.length,
+            withPhone: prospects.filter((p) => p.phone || p.phoneNumber).length,
+            withPhoneDetails: {
+              phoneField: prospects.filter((p) => p.phone).length,
+              phoneNumberField: prospects.filter((p) => p.phoneNumber).length,
+              either: prospects.filter((p) => p.phone || p.phoneNumber).length,
+            },
+            statusMatch: prospects.filter(
+              (p) => p.status && p.status === prospectFilters.statusName
+            ).length,
+            sourceMatch: prospects.filter(
+              (p) => p.source && p.source === prospectFilters.sourceName
+            ).length,
+            bothConditions: prospects.filter(
+              (p) =>
+                p.status && p.status === prospectFilters.statusName &&
+                p.source && p.source === prospectFilters.sourceName
+            ).length,
+            fullMatch: prospects.filter(
+              (p) =>
+                (p.phone || p.phoneNumber) &&
+                p.status && p.status === prospectFilters.statusName &&
+                p.source && p.source === prospectFilters.sourceName
+            ).length,
+            sampleProspects: prospects.slice(0, 3).map(p => ({
+              name: p.name,
+              phone: p.phone || 'none',
+              phoneNumber: p.phoneNumber || 'none',
+              status: p.status || 'none',
+              source: p.source || 'none',
+            })),
+          },
+        });
+      } else {
+        console.log("📋 Prospects unchanged, skipping update:", {
+          count: filtered.length,
+          criteria: `status=${prospectFilters.statusName}, source=${prospectFilters.sourceName}`,
+        });
+      }
 
       return { prospects: filtered, statuses };
     } catch (err) {
       console.error("Error syncing data:", err);
       setError("Failed to sync data");
-      setIsDataSynced(false);
       return { prospects: [], statuses: [] };
     }
   }, [
@@ -202,17 +397,47 @@ export function useCallSession() {
     prospectFilters,
   ]);
 
+  // Calculate real-time session duration from start time
+  const getSessionDuration = useCallback((): number => {
+    if (!currentSession?.startTime) return 0;
+
+    const now = new Date().getTime();
+    const startTime = currentSession.startTime.toDate().getTime();
+    const durationInSeconds = Math.floor((now - startTime) / 1000);
+
+    return Math.max(0, durationInSeconds);
+  }, [currentSession?.startTime]);
+
+  // Debounced sync function to prevent rapid successive calls
+  const debouncedSync = useCallback(() => {
+    if (syncTimeoutRef.current) {
+      clearTimeout(syncTimeoutRef.current);
+    }
+
+    syncTimeoutRef.current = setTimeout(() => {
+      syncAllData();
+      syncTimeoutRef.current = null;
+    }, 300); // 300ms debounce
+  }, [syncAllData]);
+
   // Mask phone number (hide last 3 digits)
   const maskPhoneNumber = useCallback((phone: string): string => {
     if (phone.length <= 3) return phone;
     return phone.slice(0, -3) + "***";
   }, []);
 
-  // Auto-dial phone number
+  // Auto-dial phone number (only if enabled in settings)
   const dialPhoneNumber = useCallback((phoneNumber: string) => {
+    // Check if auto dial is enabled in settings
+    if (phoneSettings?.autoDialEnabled !== true) {
+      console.log("📞 Auto dial disabled in settings, skipping dial for:", phoneNumber);
+      return;
+    }
+
+    console.log("📞 Auto dialing:", phoneNumber, "(auto dial enabled)");
     const telLink = `tel:${phoneNumber}`;
     window.open(telLink, "_self");
-  }, []);
+  }, [phoneSettings?.autoDialEnabled]);
 
   // Map disposition name dari database ke prospect status
   const mapDispositionToProspectStatus = useCallback(
@@ -281,13 +506,14 @@ export function useCallSession() {
 
       try {
         const firstProspect = prospects[0];
+        const phoneNumber = firstProspect.phone || firstProspect.phoneNumber; // Support both phone fields
 
         const callData = {
           sessionId: session.id!,
           prospectId: firstProspect.id!,
           prospectName: firstProspect.name,
-          prospectPhone: firstProspect.phone,
-          maskedPhone: maskPhoneNumber(firstProspect.phone),
+          prospectPhone: phoneNumber,
+          maskedPhone: maskPhoneNumber(phoneNumber),
           startTime: Timestamp.now(),
           duration: 0,
           status: "calling" as CallStatus,
@@ -303,10 +529,15 @@ export function useCallSession() {
         setCurrentProspect(firstProspect);
         setCallTimer(0);
 
-        // Auto-dial the phone number
-        dialPhoneNumber(firstProspect.phone);
+        // Auto-dial the phone number (if enabled in settings)
+        dialPhoneNumber(phoneNumber);
 
-        console.log("Auto-started first call for:", firstProspect.name);
+        console.log("Auto-started first call:", {
+          prospect: firstProspect.name,
+          phone: phoneNumber,
+          autoDialEnabled: phoneSettings?.autoDialEnabled,
+          session: session.id
+        });
       } catch (err) {
         console.error("Error auto-starting first call:", err);
       }
@@ -448,19 +679,76 @@ export function useCallSession() {
 
   // Start next call
   const startNextCall = useCallback(async () => {
-    if (!currentSession || callQueue.length === 0) {
-      return { success: false, error: "No prospects in queue" };
+    // Prevent race condition - check if already starting a call
+    if (isStartingNextCall.current || isProcessingCall) {
+      console.log("⏸️ startNextCall blocked - already processing");
+      return { success: false, error: "Already processing call" };
     }
 
+    if (!currentSession) {
+      return { success: false, error: "No active session" };
+    }
+
+    // Set locking flags
+    isStartingNextCall.current = true;
+    setIsProcessingCall(true);
+
     try {
-      const nextProspect = callQueue[0];
+      // Refresh callable prospects sebelum start next call
+      console.log("🔄 Refreshing callable prospects before next call...");
+      await syncAllData();
+
+      // Get next prospect from queue or refreshed callableProspects
+      let nextProspect = null;
+      
+      console.log("🔍 startNextCall debug:", {
+        currentSession: !!currentSession,
+        callQueueLength: callQueue.length,
+        callableProspectsLength: callableProspects.length,
+        currentProspect: currentProspect ? { id: currentProspect.id, name: currentProspect.name } : null
+      });
+      
+      if (callQueue.length > 0) {
+        nextProspect = callQueue[0];
+        console.log("✅ Using prospect from queue:", { id: nextProspect?.id, name: nextProspect?.name });
+      } else if (callableProspects.length > 0) {
+        // Rebuild queue from callable prospects if queue is empty
+        const availableProspects = callableProspects.filter(p => 
+          // Filter out current prospect if any
+          !currentProspect || p.id !== currentProspect.id
+        );
+        
+        if (availableProspects.length > 0) {
+          nextProspect = availableProspects[0];
+          setCallQueue(availableProspects); // Rebuild queue
+          console.log("🔄 Rebuilt queue from callable prospects:", {
+            total: availableProspects.length,
+            first: { id: nextProspect.id, name: nextProspect.name }
+          });
+        }
+      }
+
+      if (!nextProspect) {
+        return { success: false, error: "No prospects available for calling" };
+      }
+
+      // Validate prospect has required data
+      if (!nextProspect.id || !nextProspect.name) {
+        return { success: false, error: "Invalid prospect data" };
+      }
+
+      const phoneNumber = nextProspect.phone || nextProspect.phoneNumber || ""; // Support both phone fields
+      
+      if (!phoneNumber) {
+        return { success: false, error: "Prospect has no phone number" };
+      }
 
       const callData = {
         sessionId: currentSession.id!,
-        prospectId: nextProspect.id!,
+        prospectId: nextProspect.id,
         prospectName: nextProspect.name,
-        prospectPhone: nextProspect.phone,
-        maskedPhone: maskPhoneNumber(nextProspect.phone),
+        prospectPhone: phoneNumber,
+        maskedPhone: maskPhoneNumber(phoneNumber),
         startTime: Timestamp.now(),
         duration: 0,
         status: "calling" as CallStatus,
@@ -476,25 +764,42 @@ export function useCallSession() {
       setCurrentProspect(nextProspect);
       setCallTimer(0);
 
-      // Auto-dial the phone number
-      dialPhoneNumber(nextProspect.phone);
+      // Auto-dial the phone number (if enabled in settings)
+      dialPhoneNumber(phoneNumber);
+
+      console.log("Started next call:", {
+        prospect: nextProspect.name,
+        phone: phoneNumber,
+        autoDialEnabled: phoneSettings?.autoDialEnabled,
+        session: currentSession.id
+      });
 
       return { success: true, callId: docRef.id };
     } catch (err) {
       console.error("Error starting call:", err);
       return { success: false, error: "Failed to start call" };
+    } finally {
+      // Release locking flags
+      isStartingNextCall.current = false;
+      setIsProcessingCall(false);
     }
-  }, [currentSession, callQueue, user, maskPhoneNumber, dialPhoneNumber]);
+  }, [currentSession, callQueue, callableProspects, currentProspect, user, maskPhoneNumber, dialPhoneNumber, phoneSettings, syncAllData, isProcessingCall]);
 
   // SOP 4: Update status sesuai yang ada di database ketika call disposition diklik
   const endCall = useCallback(
     async (dispositionId: string, notes?: string) => {
-      if (!currentCall || !currentProspect) {
-        return { success: false, error: "No active call" };
+      // Prevent race condition - check if already ending a call
+      if (isEndingCall.current || isProcessingCall) {
+        console.log("⏸️ endCall blocked - already processing");
+        return { success: false, error: "Already processing call" };
       }
 
+      // Set locking flags
+      isEndingCall.current = true;
+      setIsProcessingCall(true);
+
       try {
-        // Ambil status dari database yang sudah disinkronisasi
+        // Find the disposition from database
         const selectedDisposition = dispositionStatuses.find(
           (status) => status.id === dispositionId
         );
@@ -506,68 +811,180 @@ export function useCallSession() {
           };
         }
 
-        // Update call log
-        const callRef = doc(db, "call_logs", currentCall.id!);
-        await updateDoc(callRef, {
-          endTime: Timestamp.now(),
-          duration: callTimer,
-          status: "completed" as CallStatus,
-          disposition: selectedDisposition.name,
-          notes: notes || "",
-          updatedAt: Timestamp.now(),
+        // Get target prospect (priority: currentProspect > callQueue > callableProspects)
+        let targetProspect = currentProspect;
+        if (!targetProspect && callQueue.length > 0) {
+          targetProspect = callQueue[0];
+        }
+        if (!targetProspect && callableProspects.length > 0) {
+          targetProspect = callableProspects[0];
+        }
+
+        console.log("🔍 endCall debug - target prospect:", {
+          hasCurrentProspect: !!currentProspect,
+          callQueueLength: callQueue.length,
+          callableProspectsLength: callableProspects.length,
+          targetProspect: targetProspect ? { 
+            id: targetProspect.id, 
+            name: targetProspect.name,
+            hasPhone: !!(targetProspect.phone || targetProspect.phoneNumber)
+          } : null
         });
 
-        // SOP 4: Update prospect status menggunakan status yang ada di database
-        // Mapping langsung berdasarkan nama status dari database
-        const targetStatus = mapDispositionToProspectStatus(
-          selectedDisposition.name
-        );
+        if (!targetProspect) {
+          return { success: false, error: "No prospect available to process disposition" };
+        }
 
-        await updateProspect(currentProspect.id!, { status: targetStatus });
+        // Validate target prospect has required fields
+        if (!targetProspect.id || !targetProspect.name) {
+          console.error("Invalid target prospect:", targetProspect);
+          return { success: false, error: "Invalid prospect data - missing ID or name" };
+        }
 
-        console.log("📞 Call completed with database status:", {
+        // If there's an active call, update the call log
+        if (currentCall && currentCall.id) {
+          const callRef = doc(db, "call_logs", currentCall.id);
+          await updateDoc(callRef, {
+            endTime: Timestamp.now(),
+            duration: callTimer,
+            status: "completed" as CallStatus,
+            disposition: selectedDisposition.name,
+            notes: notes || "",
+            updatedAt: Timestamp.now(),
+          });
+        } else {
+          // Create a call log entry even if there wasn't an active call
+          // This ensures we have a record of the disposition
+          if (currentSession && currentSession.id) {
+            const phoneNumber = targetProspect.phone || targetProspect.phoneNumber || "";
+            const callLogData = {
+              sessionId: currentSession.id,
+              prospectId: targetProspect.id,
+              prospectName: targetProspect.name,
+              prospectPhone: phoneNumber,
+              maskedPhone: maskPhoneNumber(phoneNumber),
+              startTime: Timestamp.now(),
+              endTime: Timestamp.now(),
+              duration: 0, // No actual call duration
+              status: "completed" as CallStatus,
+              disposition: selectedDisposition.name,
+              notes: notes || "",
+              userId: (user as any)?.uid || "",
+              createdAt: Timestamp.now(),
+            };
+
+            await addDoc(collection(db, "call_logs"), callLogData);
+          }
+        }
+
+        // Update prospect status
+        const targetStatus = mapDispositionToProspectStatus(selectedDisposition.name);
+        await updateProspect(targetProspect.id, { status: targetStatus });
+
+        console.log("📞 Call/Disposition completed:", {
           dispositionFromDB: selectedDisposition.name,
           mappedStatus: targetStatus,
-          prospectId: currentProspect.id,
-          prospectName: currentProspect.name,
+          prospectId: targetProspect.id,
+          prospectName: targetProspect.name,
+          hadActiveCall: !!currentCall,
           source: "database_status",
         });
 
-        // Update session statistics
-        const completedCalls = currentSession!.completedCalls + 1;
-        const successfulCalls = isSuccessfulStatus(targetStatus)
-          ? currentSession!.successfulCalls + 1
-          : currentSession!.successfulCalls;
+        // Update session statistics if session exists
+        if (currentSession && currentSession.id) {
+          const completedCalls = currentSession.completedCalls + 1;
+          const successfulCalls = isSuccessfulStatus(targetStatus)
+            ? currentSession.successfulCalls + 1
+            : currentSession.successfulCalls;
 
-        const sessionRef = doc(db, "call_sessions", currentSession!.id!);
-        await updateDoc(sessionRef, {
-          completedCalls,
-          successfulCalls,
-          updatedAt: Timestamp.now(),
-        });
+          const sessionRef = doc(db, "call_sessions", currentSession.id);
+          await updateDoc(sessionRef, {
+            completedCalls,
+            successfulCalls,
+            updatedAt: Timestamp.now(),
+          });
 
-        // Update UI state
-        const updatedQueue = callQueue.slice(1);
-        setCallQueue(updatedQueue);
+          setCurrentSession((prev) =>
+            prev ? { ...prev, completedCalls, successfulCalls } : null
+          );
+        }
+
+        // Update UI state - clear current call and prospect
         setCurrentCall(null);
         setCurrentProspect(null);
         setCallTimer(0);
 
-        setCurrentSession((prev) =>
-          prev ? { ...prev, completedCalls, successfulCalls } : null
-        );
+        // Refresh callable prospects setelah disposisi
+        console.log("🔄 Refreshing callable prospects after disposition...");
+        await syncAllData();
 
-        // Auto-start next call
-        if (updatedQueue.length > 0) {
+        // Update call queue - remove the processed prospect and start next call
+        let shouldStartNextCall = false;
+        let nextQueue = callQueue;
+
+        // Remove processed prospect from queue if it's in there
+        if (callQueue.length > 0 && callQueue[0].id === targetProspect.id) {
+          nextQueue = callQueue.slice(1);
+          setCallQueue(nextQueue);
+          shouldStartNextCall = nextQueue.length > 0;
+        } else if (callQueue.length > 0) {
+          // If processed prospect wasn't the first in queue, still try next call
+          shouldStartNextCall = true;
+        } else if (callableProspects.length > 1) {
+          // If no queue but multiple prospects available, rebuild queue
+          const remainingProspects = callableProspects.filter(p => p.id !== targetProspect.id);
+          setCallQueue(remainingProspects);
+          shouldStartNextCall = remainingProspects.length > 0;
+        }
+
+        // Auto-start next call if enabled in settings and there are more prospects
+        if (shouldStartNextCall && phoneSettings?.autoNextCall && currentSession?.status === "active") {
+          const delayMs = (phoneSettings?.callDelaySeconds || 1) * 1000;
+          console.log(`🔄 Auto next call scheduled in ${delayMs}ms`);
+          
           setTimeout(async () => {
-            await startNextCall();
-          }, 1000);
+            try {
+              // Reset locking flag sebelum next call
+              isEndingCall.current = false;
+              setIsProcessingCall(false);
+              
+              const result = await startNextCall();
+              if (!result.success) {
+                console.log("❌ Auto next call failed:", result.error);
+              } else {
+                console.log("✅ Auto next call started successfully");
+              }
+            } catch (error) {
+              console.error("❌ Error in auto next call:", error);
+              // Reset locking flags on error
+              isEndingCall.current = false;
+              setIsProcessingCall(false);
+            }
+          }, delayMs);
+        } else {
+          console.log("ℹ️ Auto next call skipped:", {
+            shouldStartNextCall,
+            autoNextCallEnabled: phoneSettings?.autoNextCall,
+            sessionActive: currentSession?.status === "active",
+            queueLength: nextQueue.length,
+            callableProspects: callableProspects.length
+          });
+          
+          // Reset locking flags if not auto calling
+          isEndingCall.current = false;
+          setIsProcessingCall(false);
         }
 
         return { success: true };
       } catch (err) {
-        console.error("Error ending call:", err);
-        return { success: false, error: "Failed to end call" };
+        console.error("Error ending call/processing disposition:", err);
+        return { success: false, error: "Failed to process disposition" };
+      } finally {
+        // Reset locking flags hanya jika tidak ada auto next call
+        if (!phoneSettings?.autoNextCall || currentSession?.status !== "active") {
+          isEndingCall.current = false;
+          setIsProcessingCall(false);
+        }
       }
     },
     [
@@ -578,9 +995,15 @@ export function useCallSession() {
       dispositionStatuses,
       updateProspect,
       callQueue,
+      callableProspects,
       startNextCall,
       mapDispositionToProspectStatus,
       isSuccessfulStatus,
+      maskPhoneNumber,
+      user,
+      phoneSettings,
+      syncAllData,
+      isProcessingCall,
     ]
   );
 
@@ -613,7 +1036,22 @@ export function useCallSession() {
     }
   }, [currentSession, sessionTimer]);
 
-  // Effect untuk sinkronisasi data saat mount dan ketika filter berubah
+  // Helper: filter callable prospects sesuai filter dan field phone/phoneNumber
+  const getFilteredCallableProspects = useCallback(() => {
+    return prospects.filter(
+      (p) =>
+        (p.phone || p.phoneNumber) &&
+        p.status && p.status === prospectFilters.statusName &&
+        p.source && p.source === prospectFilters.sourceName
+    );
+  }, [prospects, prospectFilters]);
+
+  // Gunakan helper ini untuk update callableProspects setiap kali prospects/filters berubah
+  useEffect(() => {
+    setCallableProspects(getFilteredCallableProspects());
+  }, [getFilteredCallableProspects]);
+
+  // Effect untuk sinkronisasi data saat mount dan ketika prospects berubah
   useEffect(() => {
     const shouldSync =
       user?.id &&
@@ -622,33 +1060,154 @@ export function useCallSession() {
         prospects.length !== lastProspectsLength.current);
 
     if (shouldSync) {
+      console.log("🔄 Syncing data due to initialization or prospects change");
       lastProspectsLength.current = prospects.length;
       isInitialized.current = true;
-      syncAllData();
+      debouncedSync();
     }
-  }, [user?.id, prospects.length, syncAllData]); // Trigger ketika user ID, prospects, atau syncAllData berubah
+  }, [user?.id, prospects.length, debouncedSync]);
 
-  // Effect untuk re-sync ketika filter berubah
+  // --- FIX: Only sync on init, prospects count change, or filter change ---
+  // Remove callableProspects and setProspectFilters from syncAllData dependencies
+  // Only depend on: prospects, getActiveProspectStatuses, getActiveProspectSources, prospectFilters
   useEffect(() => {
-    if (user?.id && prospects.length > 0 && isInitialized.current) {
-      syncAllData();
+    if (!user?.id) return;
+    if (prospects.length !== lastProspectsLength.current) {
+      lastProspectsLength.current = prospects.length;
+      debouncedSync();
     }
-  }, [prospectFilters.statusName, prospectFilters.sourceName, syncAllData]);
+  }, [user?.id, prospects.length, debouncedSync]);
 
-  // Timers
+  // In useEffect for filter, only sync if filter value benar-benar berubah
+  useEffect(() => {
+    if (!user?.id) return;
+    if (
+      prevFiltersRef.current.statusName !== prospectFilters.statusName ||
+      prevFiltersRef.current.sourceName !== prospectFilters.sourceName
+    ) {
+      prevFiltersRef.current = prospectFilters;
+      debouncedSync();
+    }
+  }, [user?.id, prospectFilters.statusName, prospectFilters.sourceName, debouncedSync]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Real-time listener for current session updates
+  useEffect(() => {
+    if (!currentSession?.id) return;
+
+    console.log("🔗 Setting up real-time listener for session:", currentSession.id);
+
+    const sessionRef = doc(db, "call_sessions", currentSession.id);
+    const unsubscribe = onSnapshot(sessionRef, (doc) => {
+      if (doc.exists()) {
+        const sessionData = doc.data();
+        const updatedSession = {
+          ...currentSession,
+          ...sessionData,
+          id: doc.id,
+          startTime: sessionData.startTime,
+          endTime: sessionData.endTime,
+          createdAt: sessionData.createdAt,
+          updatedAt: sessionData.updatedAt,
+        } as CallSession;
+
+        console.log("📊 Session updated from database:", {
+          sessionId: doc.id,
+          completedCalls: sessionData.completedCalls,
+          successfulCalls: sessionData.successfulCalls,
+          status: sessionData.status,
+        });
+
+        setCurrentSession(updatedSession);
+      }
+    }, (error) => {
+      console.error("Error listening to session updates:", error);
+    });
+
+    return () => {
+      console.log("🔌 Cleaning up session listener");
+      unsubscribe();
+    };
+  }, [currentSession?.id]);
+
+  // Load existing active session on mount
+  useEffect(() => {
+    const loadActiveSession = async () => {
+      if (!user?.id || currentSession) return; // Don't load if already have session
+
+      try {
+        console.log("🔍 Checking for existing active session...");
+
+        const sessionsRef = collection(db, "call_sessions");
+        const q = query(
+          sessionsRef,
+          where("userId", "==", user.id),
+          where("status", "in", ["active", "break"]),
+          orderBy("startTime", "desc"),
+          limit(1)
+        );
+
+        const snapshot = await getDocs(q);
+        if (!snapshot.empty) {
+          const sessionDoc = snapshot.docs[0];
+          const sessionData = sessionDoc.data();
+          const activeSession = {
+            id: sessionDoc.id,
+            ...sessionData,
+          } as CallSession;
+
+          console.log("✅ Found existing active session:", {
+            sessionId: activeSession.id,
+            status: activeSession.status,
+            startTime: activeSession.startTime?.toDate(),
+            completedCalls: activeSession.completedCalls,
+          });
+
+          setCurrentSession(activeSession);
+        } else {
+          console.log("ℹ️ No existing active session found");
+        }
+      } catch (error) {
+        console.error("Error loading active session:", error);
+      }
+    };
+
+    loadActiveSession();
+  }, [user?.id, currentSession]); // Include currentSession to prevent reloading
+
+  // Timers - Update session timer based on real database time
   useEffect(() => {
     let interval: NodeJS.Timeout;
 
     if (currentSession?.status === "active") {
-      interval = setInterval(() => {
-        setSessionTimer((prev) => prev + 1);
-      }, 1000);
+      // Update session timer based on actual start time from database
+      const updateTimer = () => {
+        const actualDuration = getSessionDuration();
+        setSessionTimer(actualDuration);
+      };
+
+      // Update immediately
+      updateTimer();
+
+      // Then update every second
+      interval = setInterval(updateTimer, 1000);
+    } else {
+      // Reset timer when session is not active
+      setSessionTimer(0);
     }
 
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [currentSession?.status]);
+  }, [currentSession?.status, getSessionDuration]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -683,6 +1242,29 @@ export function useCallSession() {
     return Math.floor(Math.random() * (180 - 30 + 1)) + 30; // 30-180 seconds
   }, []);
 
+  // Get comprehensive session statistics
+  const getSessionStats = useCallback(() => {
+    if (!currentSession) {
+      return {
+        isActive: false,
+        duration: 0,
+        completedCalls: 0,
+        totalCalls: 0,
+        status: "idle" as SessionStatus,
+        successfulCalls: 0,
+      };
+    }
+
+    return {
+      isActive: currentSession.status === "active" || currentSession.status === "break",
+      duration: getSessionDuration(),
+      completedCalls: currentSession.completedCalls || 0,
+      totalCalls: currentSession.totalCalls || 0,
+      status: currentSession.status,
+      successfulCalls: currentSession.successfulCalls || 0,
+    };
+  }, [currentSession, getSessionDuration]);
+
   // Format time display
   const formatTime = useCallback((seconds: number): string => {
     const hrs = Math.floor(seconds / 3600);
@@ -696,6 +1278,20 @@ export function useCallSession() {
     }
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   }, []);
+
+  // Update prospect filters when phone settings change
+  useEffect(() => {
+    if (phoneSettings?.defaultStatusFilter && phoneSettings?.defaultSourceFilter) {
+      setProspectFilters({
+        statusName: phoneSettings.defaultStatusFilter,
+        sourceName: phoneSettings.defaultSourceFilter,
+      });
+      console.log("📱 Updated prospect filters from phone settings:", {
+        status: phoneSettings.defaultStatusFilter,
+        source: phoneSettings.defaultSourceFilter,
+      });
+    }
+  }, [phoneSettings?.defaultStatusFilter, phoneSettings?.defaultSourceFilter]);
 
   return {
     // State
@@ -711,6 +1307,8 @@ export function useCallSession() {
     loading,
     error,
     isDataSynced,
+    phoneSettings,
+    isProcessingCall, // Add processing status
 
     // Actions
     startSession,
@@ -731,5 +1329,7 @@ export function useCallSession() {
     generateRandomCallDuration,
     formatTime,
     prospectFilters,
+    getSessionStats,
+    getSessionDuration,
   };
 }

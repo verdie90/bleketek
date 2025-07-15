@@ -32,26 +32,21 @@ export function CallControls({ onCallStatusUpdate }: CallControlsProps) {
     breakTimer,
     callQueue,
     callableProspects,
-    dispositionStatuses,
     loading,
-    isDataSynced,
     startSession,
     startBreak,
     endBreak,
+    startNextCall,
     endCall,
     endSession,
-    syncAllData,
     formatTime,
     maskPhoneNumber,
     getDispositionOptions,
+    phoneSettings,
   } = useCallSession();
 
   const handleStartSession = async () => {
-    // SOP: Sinkronisasi data terlebih dahulu sebelum memulai sesi
-    if (!isDataSynced) {
-      await syncAllData();
-    }
-
+    // Langsung mulai session tanpa sync check
     const result = await startSession();
     if (!result.success) {
       alert(result.error);
@@ -73,11 +68,29 @@ export function CallControls({ onCallStatusUpdate }: CallControlsProps) {
   };
 
   const handleEndCall = async (dispositionId: string, notes?: string) => {
-    const result = await endCall(dispositionId, notes);
-    if (!result.success) {
-      alert(result.error);
-    } else {
-      onCallStatusUpdate?.(dispositionId, notes);
+    try {
+      // Show info about auto dial status when processing disposition
+      if (phoneSettings?.autoDialEnabled === false) {
+        console.log("⚠️ Processing disposition with auto-dial disabled");
+      }
+      
+      if (phoneSettings?.autoNextCall === false) {
+        console.log("⚠️ Auto next call disabled in settings");
+      }
+      
+      const result = await endCall(dispositionId, notes);
+      if (!result.success) {
+        alert(result.error || "Failed to process call disposition");
+      } else {
+        console.log("✅ Call disposition processed successfully");
+        if (phoneSettings?.autoNextCall) {
+          console.log(`🔄 Next call will start in ${phoneSettings?.callDelaySeconds || 1} seconds`);
+        }
+        onCallStatusUpdate?.(dispositionId, notes);
+      }
+    } catch (error) {
+      console.error("Error processing call disposition:", error);
+      alert("Failed to process call disposition");
     }
   };
 
@@ -129,22 +142,21 @@ export function CallControls({ onCallStatusUpdate }: CallControlsProps) {
                 {currentSession.status.toUpperCase()}
               </Badge>
             )}
+            {phoneSettings !== null && (
+              <>
+                <Badge variant={phoneSettings.autoDialEnabled ? "default" : "secondary"} className="text-xs">
+                  {phoneSettings.autoDialEnabled ? "🔊 Auto-dial" : "📵 Manual"}
+                </Badge>
+                <Badge variant={phoneSettings.autoNextCall ? "default" : "secondary"} className="text-xs">
+                  {phoneSettings.autoNextCall ? "⏭️ Auto-next" : "👆 Manual-next"}
+                </Badge>
+              </>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
           {!currentSession ? (
             <div className="text-center space-y-4">
-              {/* Data Sync Status */}
-              <div className="text-xs">
-                <Badge variant={isDataSynced ? "default" : "destructive"}>
-                  {isDataSynced ? "📊 Data Synced" : "⏳ Syncing..."}
-                </Badge>
-                <p className="mt-1 text-muted-foreground">
-                  Prospects: {callableProspects.length} | Status Options:{" "}
-                  {dispositionStatuses.length}
-                </p>
-              </div>
-
               <p className="text-muted-foreground">
                 {callableProspects.length === 0
                   ? "No prospects available (status='new', source='import')"
@@ -152,9 +164,7 @@ export function CallControls({ onCallStatusUpdate }: CallControlsProps) {
               </p>
               <Button
                 onClick={handleStartSession}
-                disabled={
-                  loading || !isDataSynced || callableProspects.length === 0
-                }
+                disabled={loading || callableProspects.length === 0}
                 className="w-full"
               >
                 <Play className="mr-2 h-4 w-4" />
@@ -262,46 +272,31 @@ export function CallControls({ onCallStatusUpdate }: CallControlsProps) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {!currentCall ? (
-              <div className="text-center space-y-4">
-                {callQueue.length > 0 ? (
-                  <>
-                    <div className="space-y-2">
-                      <p className="text-muted-foreground">Next prospect:</p>
-                      <div className="font-medium">{callQueue[0]?.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {maskPhoneNumber(callQueue[0]?.phone || "")}
-                      </div>
-                    </div>
-                    <div className="text-center p-3 bg-blue-50 border border-blue-200 rounded-md">
-                      <p className="text-sm text-blue-700 font-medium">
-                        📞 Auto-Call Mode Active
-                      </p>
-                      <p className="text-xs text-blue-600 mt-1">
-                        Calls will start automatically after each disposition
-                      </p>
-                    </div>
-                  </>
-                ) : (
-                  <p className="text-muted-foreground">
-                    No more prospects to call
-                  </p>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {/* Current Prospect Info */}
+            <div className="space-y-4">
+              {/* Current Prospect Info - Always show if there's a prospect */}
+              {(currentCall || callQueue.length > 0 || callableProspects.length > 0) ? (
                 <div className="space-y-2">
-                  <div className="font-medium">{currentProspect?.name}</div>
-                  <div className="text-sm text-muted-foreground">
-                    Phone: {currentCall.maskedPhone}
+                  <div className="font-medium">
+                    {currentProspect?.name || currentCall?.prospectName || callQueue[0]?.name || callableProspects[0]?.name || "Unknown"}
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    Status: {currentProspect?.status || "N/A"}
+                    Phone: {currentCall?.maskedPhone || maskPhoneNumber(currentProspect?.phone || callQueue[0]?.phone || callableProspects[0]?.phone || "")}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    Status: {currentProspect?.status || currentCall?.disposition || callableProspects[0]?.status || "Ready to call"}
                   </div>
                 </div>
+              ) : (
+                <div className="text-center">
+                  <p className="text-muted-foreground">No prospects available for calling</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Check your filter settings or add new prospects
+                  </p>
+                </div>
+              )}
 
-                {/* Call Timer */}
+              {/* Call Timer - Only show if call is active */}
+              {currentCall && (
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">
                     Call Duration:
@@ -310,20 +305,50 @@ export function CallControls({ onCallStatusUpdate }: CallControlsProps) {
                     {formatTime(callTimer)}
                   </span>
                 </div>
+              )}
 
-                {/* Auto-dial Info */}
+              {/* Status Info */}
+              {currentCall ? (
                 <div className="text-center p-2 bg-green-50 border border-green-200 rounded-md">
                   <p className="text-sm text-green-700">
-                    📞 Auto-dialing: {currentProspect?.phone}
+                    📞 {phoneSettings?.autoDialEnabled ? 'Auto-dialing' : 'Manual dial'}: {currentProspect?.phone || currentCall.prospectPhone}
                   </p>
                   <p className="text-xs text-green-600 mt-1">
-                    Call should have opened automatically
+                    {phoneSettings?.autoDialEnabled 
+                      ? 'Call should have opened automatically'
+                      : 'Please dial manually (Auto-dial disabled in settings)'
+                    }
                   </p>
                 </div>
+              ) : (callQueue.length > 0 || callableProspects.length > 0) ? (
+                <div className="text-center p-3 bg-blue-50 border border-blue-200 rounded-md">
+                  <p className="text-sm text-blue-700 font-medium">
+                    📞 Ready to Start Call
+                  </p>
+                  <p className="text-xs text-blue-600 mt-1">
+                    Choose a disposition to begin calling
+                  </p>
+                  {phoneSettings?.autoDialEnabled === false && (
+                    <p className="text-xs text-orange-600 mt-1">
+                      ⚠️ Auto-dial disabled - you'll need to dial manually
+                    </p>
+                  )}
+                  {phoneSettings?.autoNextCall === false && (
+                    <p className="text-xs text-orange-600 mt-1">
+                      ⚠️ Auto-next call disabled - manual progression only
+                    </p>
+                  )}
+                  {phoneSettings?.autoNextCall === true && (
+                    <p className="text-xs text-green-600 mt-1">
+                      ✅ Auto-next call enabled ({phoneSettings?.callDelaySeconds || 1}s delay)
+                    </p>
+                  )}
+                </div>
+              ) : null}
 
-                {/* SOP 4: Call Disposition Buttons - Update status sesuai database */}
+              {/* SOP 4: Call Disposition Buttons - Always show when session active and prospects available */}
+              {(currentCall || callQueue.length > 0 || callableProspects.length > 0) && getDispositionOptions().length > 0 && (
                 <div className="grid grid-cols-2 gap-2">
-                  {/* Menggunakan status dari database yang sudah disinkronisasi */}
                   {getDispositionOptions().map((disposition) => (
                     <Button
                       key={disposition.id}
@@ -363,8 +388,8 @@ export function CallControls({ onCallStatusUpdate }: CallControlsProps) {
                     </Button>
                   ))}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </CardContent>
         </Card>
       )}

@@ -170,6 +170,11 @@ export default function TelemarketingSettings() {
       phoneNumber: "+6221-1234567",
       enabled: true,
     },
+    // New settings
+    callDelaySeconds: 3,
+    autoNextCall: true,
+    defaultStatusFilter: "Baru",
+    defaultSourceFilter: "Database",
   });
 
   const [newAction, setNewAction] = useState("");
@@ -219,6 +224,11 @@ export default function TelemarketingSettings() {
         blacklistedNumbers: phoneSettings.blacklistedNumbers,
         allowedAreaCodes: phoneSettings.allowedAreaCodes,
         callerIdSettings: phoneSettings.callerIdSettings,
+        // New settings
+        callDelaySeconds: phoneSettings.callDelaySeconds || 3,
+        autoNextCall: phoneSettings.autoNextCall !== undefined ? phoneSettings.autoNextCall : true,
+        defaultStatusFilter: phoneSettings.defaultStatusFilter || "Baru",
+        defaultSourceFilter: phoneSettings.defaultSourceFilter || "Database",
       });
     }
   }, [phoneSettings]);
@@ -1331,6 +1341,18 @@ export default function TelemarketingSettings() {
                       </div>
                       <div className="flex items-center space-x-2">
                         <Switch
+                          checked={phoneForm.autoNextCall}
+                          onCheckedChange={(checked) =>
+                            setPhoneForm({
+                              ...phoneForm,
+                              autoNextCall: checked,
+                            })
+                          }
+                        />
+                        <Label>Auto Next Call</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Switch
                           checked={phoneForm.recordCallsEnabled}
                           onCheckedChange={(checked) =>
                             setPhoneForm({
@@ -1352,6 +1374,94 @@ export default function TelemarketingSettings() {
                           }
                         />
                         <Label>Voicemail Detection</Label>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Call Automation Settings */}
+                  <div>
+                    <h4 className="text-sm font-medium mb-3">
+                      Call Automation & Filters
+                    </h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="callDelaySeconds">Call Delay (seconds)</Label>
+                        <Input
+                          id="callDelaySeconds"
+                          type="number"
+                          min="0"
+                          max="60"
+                          value={phoneForm.callDelaySeconds}
+                          onChange={(e) =>
+                            setPhoneForm({
+                              ...phoneForm,
+                              callDelaySeconds: parseInt(e.target.value) || 0,
+                            })
+                          }
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Jeda waktu antar call otomatis
+                        </p>
+                      </div>
+                      <div>
+                        <Label htmlFor="defaultStatusFilter">Default Status Filter</Label>
+                        <Select
+                          value={phoneForm.defaultStatusFilter}
+                          onValueChange={(value) =>
+                            setPhoneForm({
+                              ...phoneForm,
+                              defaultStatusFilter: value,
+                            })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select default status" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {prospectStatuses.map((status) => (
+                              <SelectItem key={status.id} value={status.name}>
+                                <div className="flex items-center space-x-2">
+                                  <div
+                                    className="w-3 h-3 rounded-full"
+                                    style={{ backgroundColor: status.color }}
+                                  />
+                                  <span>{status.name}</span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4 mt-4">
+                      <div>
+                        <Label htmlFor="defaultSourceFilter">Default Source Filter</Label>
+                        <Select
+                          value={phoneForm.defaultSourceFilter}
+                          onValueChange={(value) =>
+                            setPhoneForm({
+                              ...phoneForm,
+                              defaultSourceFilter: value,
+                            })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select default source" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {prospectSources.map((source) => (
+                              <SelectItem key={source.id} value={source.name}>
+                                <div className="flex items-center space-x-2">
+                                  <div
+                                    className="w-3 h-3 rounded-full"
+                                    style={{ backgroundColor: source.color }}
+                                  />
+                                  <span>{source.name}</span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
                   </div>

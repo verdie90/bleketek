@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import {
   Breadcrumb,
@@ -27,64 +27,67 @@ import { Phone, Users, Clock, Target, Filter } from "lucide-react";
 import { CallControls } from "@/components/call-controls";
 import { ScriptViewer } from "@/components/script-viewer";
 import { useCallSession } from "@/hooks/use-call-session";
-import { useTelemarketingSettings } from "@/hooks/use-telemarketing-settings";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
+import { useProspects } from "@/hooks/use-prospects";
+import { Button } from "@/components/ui/button";
+import { Play } from "lucide-react";
 
 export default function TelemarketingCallsPage() {
   const {
     currentSession,
+    currentCall,
     currentProspect,
     callableProspects,
     sessionTimer,
+    breakTimer,
     formatTime,
-    setProspectFilters,
     prospectFilters,
+    loading,
+    getSessionStats,
+    startSession,
   } = useCallSession();
 
-  const { getActiveProspectStatuses, getActiveProspectSources } =
-    useTelemarketingSettings();
+  const { prospects } = useProspects();
 
   const [callNotes, setCallNotes] = useState("");
 
-  // Get available statuses and sources
-  const availableStatuses = getActiveProspectStatuses();
-  const availableSources = getActiveProspectSources();
-
-  const handleCallStatusUpdate = (status: string, notes?: string) => {
+  const handleCallStatusUpdate = useCallback((status: string, notes?: string) => {
     console.log("Call completed:", { status, notes });
     setCallNotes("");
-  };
+  }, []);
 
-  const handleStatusFilterChange = (statusId: string) => {
-    const selectedStatus = availableStatuses.find((s) => s.id === statusId);
-    setProspectFilters({
-      ...prospectFilters,
-      statusName: selectedStatus?.name || "",
-    });
-  };
+  // Calculate real-time session statistics
+  const sessionStats = getSessionStats();
+  const stats = useMemo(() => {
+    // Calculate session duration display
+    let sessionDuration = "00:00";
+    
+    if (sessionStats.isActive) {
+      if (sessionStats.status === "break") {
+        sessionDuration = `Break: ${formatTime(breakTimer)}`;
+      } else {
+        sessionDuration = formatTime(sessionStats.duration);
+      }
+    } else if (sessionStats.status === "ended" && currentSession?.duration) {
+      sessionDuration = formatTime(currentSession.duration);
+    }
 
-  const handleSourceFilterChange = (sourceId: string) => {
-    const selectedSource = availableSources.find((s) => s.id === sourceId);
-    setProspectFilters({
-      ...prospectFilters,
-      sourceName: selectedSource?.name || "",
-    });
-  };
-
-  // Calculate statistics
-  const stats = {
-    availableProspects: callableProspects.length,
-    activeSession: currentSession ? 1 : 0,
-    sessionDuration: currentSession ? formatTime(sessionTimer) : "00:00",
-    completedCalls: currentSession?.completedCalls || 0,
-  };
+    return {
+      availableProspects: callableProspects.length,
+      activeSession: sessionStats.isActive ? 1 : 0,
+      sessionDuration,
+      completedCalls: sessionStats.completedCalls,
+      totalCalls: sessionStats.totalCalls,
+      sessionStatus: sessionStats.status,
+      isLoading: loading,
+    };
+  }, [
+    callableProspects.length, 
+    sessionStats, 
+    breakTimer, 
+    formatTime, 
+    currentSession?.duration,
+    loading
+  ]);
 
   return (
     <SidebarProvider>
@@ -115,88 +118,34 @@ export default function TelemarketingCallsPage() {
         </header>
 
         <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-          {/* Filter Controls */}
+          {/* Current Filter Display */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Filter className="h-4 w-4" />
-                Prospect Filters
+                Active Prospect Filter
               </CardTitle>
               <CardDescription>
-                Select status and source to filter available prospects
+                Filters are configured in Telemarketing Settings. Only prospects matching these criteria will be available for calling.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="status-filter">Prospect Status</Label>
-                  <Select
-                    value={
-                      availableStatuses.find(
-                        (s) => s.name === prospectFilters.statusName
-                      )?.id || ""
-                    }
-                    onValueChange={handleStatusFilterChange}
-                  >
-                    <SelectTrigger id="status-filter">
-                      <SelectValue placeholder="Select status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableStatuses.map((status) => (
-                        <SelectItem key={status.id} value={status.id!}>
-                          <div className="flex items-center gap-2">
-                            <div
-                              className="w-3 h-3 rounded-full"
-                              style={{ backgroundColor: status.color }}
-                            />
-                            {status.name}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              <div className="p-3 bg-muted rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">
+                      <strong>Current Filter:</strong> Status = "
+                      {prospectFilters.statusName}", Source = "
+                      {prospectFilters.sourceName}"
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Showing {callableProspects.length} prospects matching these criteria
+                    </p>
+                    <p className="text-xs text-blue-600 mt-2">
+                      📝 To change filters, go to Settings → Telemarketing → Phone Settings
+                    </p>
+                  </div>
                 </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="source-filter">Prospect Source</Label>
-                  <Select
-                    value={
-                      availableSources.find(
-                        (s) => s.name === prospectFilters.sourceName
-                      )?.id || ""
-                    }
-                    onValueChange={handleSourceFilterChange}
-                  >
-                    <SelectTrigger id="source-filter">
-                      <SelectValue placeholder="Select source" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableSources.map((source) => (
-                        <SelectItem key={source.id} value={source.id!}>
-                          <div className="flex items-center gap-2">
-                            <div
-                              className="w-3 h-3 rounded-full"
-                              style={{ backgroundColor: source.color }}
-                            />
-                            {source.name}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="mt-4 p-3 bg-muted rounded-lg">
-                <p className="text-sm text-muted-foreground">
-                  <strong>Current Filter:</strong> Status = "
-                  {prospectFilters.statusName}", Source = "
-                  {prospectFilters.sourceName}"
-                </p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Showing {stats.availableProspects} prospects matching these
-                  criteria
-                </p>
               </div>
             </CardContent>
           </Card>
@@ -212,7 +161,7 @@ export default function TelemarketingCallsPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {stats.availableProspects}
+                  {callableProspects.length}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Prospects with phone numbers (active)
@@ -230,7 +179,9 @@ export default function TelemarketingCallsPage() {
               <CardContent>
                 <div className="text-2xl font-bold">{stats.activeSession}</div>
                 <p className="text-xs text-muted-foreground">
-                  {currentSession?.status || "No active session"}
+                  {stats.sessionStatus === "active" ? "Session Active" : 
+                   stats.sessionStatus === "break" ? "On Break" :
+                   stats.sessionStatus === "ended" ? "Session Ended" : "No active session"}
                 </p>
               </CardContent>
             </Card>
@@ -262,10 +213,8 @@ export default function TelemarketingCallsPage() {
               <CardContent>
                 <div className="text-2xl font-bold">{stats.completedCalls}</div>
                 <p className="text-xs text-muted-foreground">
-                  {currentSession
-                    ? `${Math.round(
-                        (stats.completedCalls / currentSession.totalCalls) * 100
-                      )}% of total`
+                  {stats.totalCalls > 0
+                    ? `${Math.round((stats.completedCalls / stats.totalCalls) * 100)}% of ${stats.totalCalls} total`
                     : "No active session"}
                 </p>
               </CardContent>
@@ -276,7 +225,31 @@ export default function TelemarketingCallsPage() {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {/* Call Controls - Full height on mobile, left column on desktop */}
             <div className="md:col-span-1">
-              <CallControls onCallStatusUpdate={handleCallStatusUpdate} />
+              {(!currentSession || stats.sessionStatus === "ended") ? (
+                <div className="text-center space-y-4">
+                  <p className="text-muted-foreground">
+                    {callableProspects.length === 0
+                      ? "No prospects available (status='new', source='import')"
+                      : "Ready to start calling session"}
+                  </p>
+                  <Button
+                    onClick={async () => {
+                      if (loading || callableProspects.length === 0) return;
+                      const result = await startSession();
+                      if (result && !result.success && result.error) {
+                        alert(result.error);
+                      }
+                    }}
+                    disabled={loading || callableProspects.length === 0}
+                    className="w-full"
+                  >
+                    <Play className="mr-2 h-4 w-4" />
+                    {loading ? "Starting..." : "Start Session"}
+                  </Button>
+                </div>
+              ) : (
+                <CallControls onCallStatusUpdate={handleCallStatusUpdate} />
+              )}
             </div>
 
             {/* Script Viewer - Takes remaining space */}
@@ -298,24 +271,21 @@ export default function TelemarketingCallsPage() {
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
                     <h4 className="font-medium text-sm mb-2">
-                      � Filtering Prospects
+                      🎯 Prospect Filtering
                     </h4>
                     <ul className="text-sm text-muted-foreground space-y-1">
                       <li>
-                        • Use status filter to select prospect status (e.g.,
-                        "Baru", "Contacted")
+                        • Prospect filters are configured in Telemarketing Settings
                       </li>
                       <li>
-                        • Use source filter to select prospect source (e.g.,
-                        "Database", "Website")
+                        • Go to Settings → Telemarketing → Phone Settings to change filters
+                      </li>
+                      <li>
+                        • Set default status and source filters for auto calling
                       </li>
                       <li>
                         • Only prospects matching both filters will be available
                         for calling
-                      </li>
-                      <li>
-                        • Change filters anytime to target different prospect
-                        segments
                       </li>
                     </ul>
                   </div>
@@ -325,19 +295,16 @@ export default function TelemarketingCallsPage() {
                     </h4>
                     <ul className="text-sm text-muted-foreground space-y-1">
                       <li>
-                        • Click "Start Session" to begin auto-calling filtered
-                        prospects
+                        • Click "Start Session" to begin calling filtered prospects
                       </li>
                       <li>
-                        • System will queue prospects matching your selected
-                        filters
+                        • System queues prospects matching your configured filters
                       </li>
                       <li>
-                        • Phone numbers will show last 3 digits hidden for
-                        preview
+                        • Phone numbers show last 3 digits hidden for preview
                       </li>
                       <li>
-                        • Calls will start automatically after session starts
+                        • Auto-calling respects delay settings between calls
                       </li>
                     </ul>
                   </div>
@@ -350,6 +317,25 @@ export default function TelemarketingCallsPage() {
                       <li>• Session timer tracks your active calling time</li>
                       <li>• Break timer tracks pause duration separately</li>
                       <li>• End session when done for the day</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-sm mb-2">
+                      🔄 Auto Call Features
+                    </h4>
+                    <ul className="text-sm text-muted-foreground space-y-1">
+                      <li>
+                        • Enable "Auto Next Call" in Telemarketing Settings
+                      </li>
+                      <li>
+                        • Set call delay (seconds) between auto calls
+                      </li>
+                      <li>
+                        • System automatically moves to next prospect after disposition
+                      </li>
+                      <li>
+                        • Prevents race conditions and ensures smooth calling flow
+                      </li>
                     </ul>
                   </div>
                   <div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   collection,
   doc,
@@ -68,6 +68,11 @@ export interface PhoneSettings {
     phoneNumber: string;
     enabled: boolean;
   };
+  // New settings for call automation
+  callDelaySeconds: number; // Jeda antar call dalam detik
+  autoNextCall: boolean; // Auto call ke prospect berikutnya
+  defaultStatusFilter: string; // Default prospect status filter
+  defaultSourceFilter: string; // Default prospect source filter
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
@@ -452,29 +457,29 @@ export function useTelemarketingSettings() {
   };
 
   // Utility functions
-  const getActiveProspectSources = () => {
+  const getActiveProspectSources = useCallback(() => {
     return prospectSources.filter((source) => source.isActive);
-  };
+  }, [prospectSources]);
 
-  const getActiveProspectStatuses = () => {
+  const getActiveProspectStatuses = useCallback(() => {
     return prospectStatuses.filter((status) => status.isActive);
-  };
+  }, [prospectStatuses]);
 
-  const getDefaultProspectStatus = () => {
+  const getDefaultProspectStatus = useCallback(() => {
     return prospectStatuses.find(
       (status) => status.isDefault && status.isActive
     );
-  };
+  }, [prospectStatuses]);
 
-  const getSuccessfulProspectStatuses = () => {
+  const getSuccessfulProspectStatuses = useCallback(() => {
     return prospectStatuses.filter(
       (status) => status.isActive && status.isSuccessful
     );
-  };
+  }, [prospectStatuses]);
 
-  const getRecentActivities = (limit: number = 20) => {
+  const getRecentActivities = useCallback((limit: number = 20) => {
     return activities.slice(0, limit);
-  };
+  }, [activities]);
 
   // Initialize default data
   const initializeDefaultData = async () => {
@@ -603,6 +608,11 @@ export function useTelemarketingSettings() {
           phoneNumber: "+6221-1234567",
           enabled: true,
         },
+        // New default settings
+        callDelaySeconds: 3,
+        autoNextCall: true,
+        defaultStatusFilter: "Baru",
+        defaultSourceFilter: "Database",
         createdBy: "system",
       };
 
