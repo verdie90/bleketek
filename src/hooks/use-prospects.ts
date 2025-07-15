@@ -14,6 +14,7 @@ import {
   where,
   Timestamp,
   writeBatch,
+  getDoc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useTelemarketingSettings } from "./use-telemarketing-settings";
@@ -121,6 +122,20 @@ export const useProspects = () => {
           id: doc.id,
           ...doc.data(),
         })) as Prospect[];
+        
+        // Log prospects with lastContactDate for debugging
+        const prospectsWithLastContact = prospectsData.filter(p => p.lastContactDate);
+        if (prospectsWithLastContact.length > 0) {
+          console.log("📊 Prospects with lastContactDate loaded:", 
+            prospectsWithLastContact.map(p => ({
+              id: p.id,
+              name: p.name,
+              lastContactDate: p.lastContactDate,
+              lastContactDateFormatted: p.lastContactDate?.toDate?.()?.toISOString()
+            }))
+          );
+        }
+        
         setProspects(prospectsData);
         setLoading(false);
       },
@@ -159,7 +174,12 @@ export const useProspects = () => {
     try {
       console.log("🔍 updateProspect called with:", {
         prospectId: id,
-        updateData,
+        updateData: {
+          ...updateData,
+          lastContactDateFormatted: updateData.lastContactDate?.toDate().toISOString(),
+          lastContactDateType: typeof updateData.lastContactDate,
+          isTimestampInstance: updateData.lastContactDate instanceof Timestamp
+        },
         timestamp: new Date().toISOString()
       });
       
@@ -169,11 +189,33 @@ export const useProspects = () => {
         lastUpdated: Timestamp.now(),
       };
       
-      console.log("🔍 Final update data being sent to Firestore:", finalUpdateData);
+      console.log("🔍 Final update data being sent to Firestore:", {
+        ...finalUpdateData,
+        lastContactDateFormatted: finalUpdateData.lastContactDate?.toDate?.()?.toISOString(),
+        lastUpdatedFormatted: finalUpdateData.lastUpdated.toDate().toISOString()
+      });
       
       await updateDoc(prospectRef, finalUpdateData);
       
-      console.log("✅ Prospect updated successfully in Firestore");
+      console.log("✅ Prospect updated successfully in Firestore - now verifying data...");
+      
+      // Verify the update by reading back the document
+      const updatedDocRef = doc(db, "prospects", id);
+      const updatedDocSnap = await getDoc(updatedDocRef);
+      if (updatedDocSnap.exists()) {
+        const verifyData = updatedDocSnap.data();
+        console.log("✅ Verification - Data in database:", {
+          id: updatedDocSnap.id,
+          status: verifyData.status,
+          assignedTo: verifyData.assignedTo,
+          lastContactDate: verifyData.lastContactDate,
+          lastContactDateFormatted: verifyData.lastContactDate?.toDate?.()?.toISOString(),
+          lastUpdated: verifyData.lastUpdated,
+          lastUpdatedFormatted: verifyData.lastUpdated?.toDate?.()?.toISOString()
+        });
+      } else {
+        console.warn("⚠️ Could not verify update - document not found");
+      }
       
       return { success: true };
     } catch (err: any) {

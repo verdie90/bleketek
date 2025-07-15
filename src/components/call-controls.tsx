@@ -69,12 +69,14 @@ export function CallControls({ onCallStatusUpdate }: CallControlsProps) {
 
   const handleEndCall = async (dispositionId: string, notes?: string) => {
     try {
-      console.log("🔍 handleEndCall triggered with:", {
+      console.log("🔍 CallControls.handleEndCall triggered with:", {
         dispositionId,
         notes,
         currentCall: currentCall?.id,
         currentProspect: currentProspect?.id,
-        currentProspectName: currentProspect?.name
+        currentProspectName: currentProspect?.name,
+        callQueue: callQueue?.length,
+        callableProspects: callableProspects?.length
       });
       
       // Show info about auto dial status when processing disposition
@@ -86,10 +88,12 @@ export function CallControls({ onCallStatusUpdate }: CallControlsProps) {
         console.log("⚠️ Auto next call disabled in settings");
       }
       
+      console.log("🔄 About to call endCall from useCallSession...");
       const result = await endCall(dispositionId, notes);
-      console.log("🔍 endCall result:", result);
+      console.log("🔍 endCall result from useCallSession:", result);
       
       if (!result.success) {
+        console.error("❌ endCall failed:", result.error);
         alert(result.error || "Failed to process call disposition");
       } else {
         console.log("✅ Call disposition processed successfully");
@@ -99,7 +103,7 @@ export function CallControls({ onCallStatusUpdate }: CallControlsProps) {
         onCallStatusUpdate?.(dispositionId, notes);
       }
     } catch (error) {
-      console.error("Error processing call disposition:", error);
+      console.error("❌ Error in CallControls.handleEndCall:", error);
       alert("Failed to process call disposition");
     }
   };

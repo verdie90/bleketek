@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import {
   Breadcrumb,
@@ -71,6 +71,7 @@ import {
   Tag,
 } from "lucide-react";
 import { format } from "date-fns";
+import { Timestamp } from "firebase/firestore";
 import { useProspects, ProspectsFilter } from "@/hooks/use-prospects";
 import { ProspectsFilters, BulkActions } from "@/components/prospects-filters";
 import { ImportExcelModal } from "@/components/import-excel-modal";
@@ -93,6 +94,20 @@ export default function TelemarketingProspectsPage() {
     prospectStatuses,
     users,
   } = useProspects();
+
+  // Debug: Log prospects with lastContactDate
+  useEffect(() => {
+    const prospectsWithLastContact = prospects.filter(p => p.lastContactDate);
+    console.log("📊 Prospects in UI with lastContactDate:", prospectsWithLastContact.map(p => ({
+      id: p.id,
+      name: p.name,
+      lastContactDate: p.lastContactDate,
+      lastContactDateType: typeof p.lastContactDate,
+      lastContactDateFormatted: p.lastContactDate?.toDate?.()?.toISOString(),
+      hasToDateMethod: typeof p.lastContactDate?.toDate === 'function'
+    })));
+    console.log("📊 Total prospects:", prospects.length, "With lastContactDate:", prospectsWithLastContact.length);
+  }, [prospects]);
 
   // Helper functions to get labels from database
   const getStatusLabel = (statusName: string) => {
@@ -465,6 +480,67 @@ export default function TelemarketingProspectsPage() {
                 </div>
               </div>
 
+              {/* Test Button for LastContactDate */}
+              <Card className="mb-4">
+                <CardHeader>
+                  <CardTitle className="text-sm">🧪 Test LastContactDate Update</CardTitle>
+                  <CardDescription>
+                    Click button below to test manual lastContactDate update on first prospect
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button
+                    onClick={async () => {
+                      if (prospects.length === 0) {
+                        alert("No prospects available");
+                        return;
+                      }
+                      
+                      const firstProspect = prospects[0];
+                      console.log("🧪 Testing lastContactDate update for:", firstProspect.name);
+                      
+                      const result = await updateProspect(firstProspect.id!, {
+                        lastContactDate: Timestamp.now()
+                      });
+                      
+                      console.log("🧪 Test result:", result);
+                      
+                      if (result.success) {
+                        alert(`✅ LastContactDate updated for ${firstProspect.name} - check table and console`);
+                      } else {
+                        alert(`❌ Failed: ${result.error}`);
+                      }
+                    }}
+                    disabled={prospects.length === 0}
+                    className="w-full"
+                  >
+                    <Calendar className="mr-2 h-4 w-4" />
+                    Test Update First Prospect LastContactDate
+                  </Button>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Total prospects: {prospects.length} | With lastContactDate: {prospects.filter(p => p.lastContactDate).length}
+                  </p>
+                </CardContent>
+              </Card>
+
+              {/* Debug Card - Last Contact Dates */}
+              {prospects.filter(p => p.lastContactDate).length > 0 && (
+                <Card className="mb-4">
+                  <CardHeader>
+                    <CardTitle className="text-sm">🔍 Debug: LastContactDate Data</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-xs space-y-1">
+                      {prospects.filter(p => p.lastContactDate).slice(0, 3).map(p => (
+                        <div key={p.id} className="p-2 bg-muted rounded">
+                          <strong>{p.name}:</strong> {p.lastContactDate?.toDate?.()?.toISOString() || 'Invalid'}
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Table */}
               <div className="rounded-md border">
                 <Table>
@@ -535,12 +611,27 @@ export default function TelemarketingProspectsPage() {
                             {getAssignedToLabel(prospect.assignedTo || "")}
                           </TableCell>
                           <TableCell>
-                            {prospect.lastContactDate
-                              ? format(
-                                  prospect.lastContactDate.toDate(),
-                                  "MMM dd, yyyy"
-                                )
-                              : "-"}
+                            {(() => {
+                              console.log("🔍 Rendering lastContactDate for prospect:", {
+                                name: prospect.name,
+                                lastContactDate: prospect.lastContactDate,
+                                type: typeof prospect.lastContactDate,
+                                hasToDate: typeof prospect.lastContactDate?.toDate === 'function'
+                              });
+                              
+                              if (prospect.lastContactDate) {
+                                try {
+                                  return format(
+                                    prospect.lastContactDate.toDate(),
+                                    "MMM dd, yyyy"
+                                  );
+                                } catch (error) {
+                                  console.error("❌ Error formatting lastContactDate:", error, prospect.lastContactDate);
+                                  return "Invalid Date";
+                                }
+                              }
+                              return "-";
+                            })()}
                           </TableCell>
                           <TableCell>
                             {prospect.nextFollowUpDate
@@ -581,6 +672,23 @@ export default function TelemarketingProspectsPage() {
                                 >
                                   <Edit className="mr-2 h-4 w-4" />
                                   Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={async () => {
+                                    console.log("🔧 Test: Updating lastContactDate manually for prospect:", prospect.name);
+                                    const result = await updateProspect(prospect.id!, {
+                                      lastContactDate: Timestamp.now()
+                                    });
+                                    console.log("🔧 Test result:", result);
+                                    if (result.success) {
+                                      alert(`LastContactDate updated for ${prospect.name}`);
+                                    } else {
+                                      alert(`Failed to update: ${result.error}`);
+                                    }
+                                  }}
+                                >
+                                  <Calendar className="mr-2 h-4 w-4" />
+                                  Test Update Contact
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                   className="text-destructive"

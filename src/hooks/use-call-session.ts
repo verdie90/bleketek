@@ -1022,20 +1022,34 @@ export function useCallSession() {
           return { success: false, error: "No user authenticated for assignment" };
         }
         
+        const currentTimestamp = Timestamp.now();
         const updateData: Partial<Prospect> = { 
           status: targetStatus,
-          assignedTo: userId // Assign prospect to the agent who made the call
+          assignedTo: userId, // Assign prospect to the agent who made the call
+          lastContactDate: currentTimestamp, // Update last contact date
         };
         
-        console.log("📝 Updating prospect with data:", updateData);
+        console.log("📝 Updating prospect with data:", {
+          prospectId: targetProspect.id,
+          prospectName: targetProspect.name,
+          status: targetStatus,
+          assignedTo: userId,
+          lastContactDate: currentTimestamp,
+          lastContactDateFormatted: currentTimestamp.toDate().toISOString(),
+          timestampType: typeof currentTimestamp,
+          isTimestamp: currentTimestamp instanceof Timestamp
+        });
+        
+        console.log("🔄 About to call updateProspect...");
         const updateResult = await updateProspect(targetProspect.id, updateData);
+        console.log("🔄 updateProspect result:", updateResult);
         
         if (!updateResult.success) {
           console.error("❌ Failed to update prospect:", updateResult.error);
           return { success: false, error: `Failed to update prospect: ${updateResult.error}` };
         }
         
-        console.log("✅ Prospect updated successfully with status and assignedTo");
+        console.log("✅ Prospect updated successfully with status, assignedTo, and lastContactDate");
 
         console.log("📞 Call/Disposition completed:", {
           dispositionFromDB: selectedDisposition.name,

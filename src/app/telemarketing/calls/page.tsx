@@ -47,21 +47,14 @@ export default function TelemarketingCallsPage() {
     loading,
     getSessionStats,
     startSession,
+    endCall,
+    getDispositionOptions,
   } = useCallSession();
 
   const { prospects } = useProspects();
 
   const [callNotes, setCallNotes] = useState("");
 
-  // Debug useEffect to monitor user in page component
-  useEffect(() => {
-    console.log("🔍 User state in calls page:", {
-      user,
-      isAuthenticated: !!user,
-      userId: user?.id,
-      userEmail: user?.email
-    });
-  }, [user]);
 
   const handleCallStatusUpdate = useCallback((status: string, notes?: string) => {
     console.log("Call completed:", { status, notes });
@@ -103,6 +96,7 @@ export default function TelemarketingCallsPage() {
   ]);
 
   return (
+
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
@@ -131,49 +125,6 @@ export default function TelemarketingCallsPage() {
         </header>
 
         <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-          {/* Debug Card - Only show in development */}
-          {process.env.NODE_ENV === 'development' && (
-            <Card className="border-yellow-200 bg-yellow-50">
-              <CardHeader>
-                <CardTitle className="text-sm text-yellow-800">Debug Info</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <strong>Current User:</strong>
-                    <pre className="text-xs mt-1 p-2 bg-white rounded">
-                      {JSON.stringify({
-                        id: user?.id,
-                        email: user?.email,
-                        fullName: user?.fullName,
-                        username: user?.username,
-                        authenticated: !!user,
-                        userKeysAvailable: user ? Object.keys(user) : null
-                      }, null, 2)}
-                    </pre>
-                  </div>
-                  <div>
-                    <strong>Current Prospect:</strong>
-                    <pre className="text-xs mt-1 p-2 bg-white rounded">
-                      {JSON.stringify({
-                        id: currentProspect?.id,
-                        name: currentProspect?.name,
-                        assignedTo: currentProspect?.assignedTo,
-                        status: currentProspect?.status
-                      }, null, 2)}
-                    </pre>
-                  </div>
-                </div>
-                {!user && (
-                  <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded">
-                    <p className="text-red-700 text-sm">
-                      ⚠️ No user logged in. Please login first to test auto-assign feature.
-                    </p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
 
           {/* Current Filter Display */}
           <Card>
@@ -280,6 +231,51 @@ export default function TelemarketingCallsPage() {
 
           {/* Main Content */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {/* Debug Test Panel - Only show if there's a current prospect or session */}
+            {(currentProspect || currentSession) && (
+              <div className="md:col-span-full mb-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">🧪 Debug Call Disposition Test</CardTitle>
+                    <CardDescription>
+                      Test lastContactDate update via call disposition
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      <p className="text-sm">
+                        <strong>Current Prospect:</strong> {currentProspect?.name || "None"}
+                      </p>
+                      <p className="text-sm">
+                        <strong>Session Active:</strong> {currentSession?.status || "None"}
+                      </p>
+                      <div className="flex gap-2">
+                        {getDispositionOptions().slice(0, 3).map((disposition) => (
+                          <Button
+                            key={disposition.id}
+                            size="sm"
+                            onClick={async () => {
+                              console.log("🧪 Testing call disposition directly:", disposition.name);
+                              const result = await endCall(disposition.id, "Test from debug panel");
+                              console.log("🧪 Direct endCall result:", result);
+                              if (result.success) {
+                                alert(`✅ Test disposition "${disposition.name}" successful - check prospects table`);
+                              } else {
+                                alert(`❌ Test failed: ${result.error}`);
+                              }
+                            }}
+                            disabled={!currentProspect && !callableProspects.length}
+                          >
+                            Test {disposition.name}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
             {/* Call Controls - Full height on mobile, left column on desktop */}
             <div className="md:col-span-1">
               {(!currentSession || stats.sessionStatus === "ended") ? (
