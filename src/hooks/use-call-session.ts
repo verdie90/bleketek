@@ -228,9 +228,10 @@ export function useCallSession() {
           return () => unsubscribeSession();
         }, [user]);
 
-        // Listen for current call log for this session
+        // Listen for current call log for this session - with protection for auto call
         useEffect(() => {
           if (!currentSession) return;
+          
           const callQuery = query(
             collection(db, "call_logs"),
             where("sessionId", "==", currentSession.id),
@@ -238,30 +239,69 @@ export function useCallSession() {
             limit(1)
           );
           const unsubscribeCall = onSnapshot(callQuery, (snapshot) => {
+            // Skip listener updates during call processing to prevent data conflicts
+            if (isProcessingCall || isStartingNextCall.current || isEndingCall.current) {
+              console.log("⏸️ Ignoring call listener update during processing");
+              return;
+            }
+            
             if (!snapshot.empty) {
               const callData = snapshot.docs[0].data() as CallLog;
-              setCurrentCall({ ...callData, id: snapshot.docs[0].id });
+              const newCall = { ...callData, id: snapshot.docs[0].id };
+              
+              // Only update if it's actually a different call
+              if (!currentCall || currentCall.id !== newCall.id) {
+                console.log("📞 Call listener: New call detected:", {
+                  callId: newCall.id,
+                  prospectName: newCall.prospectName
+                });
+                setCurrentCall(newCall);
+              }
             } else {
-              setCurrentCall(null);
+              if (currentCall) {
+                console.log("📞 Call listener: No active call");
+                setCurrentCall(null);
+              }
             }
           });
           return () => unsubscribeCall();
-        }, [currentSession]);
+        }, [currentSession, isProcessingCall]);
 
-        // Listen for current prospect (the one being called)
+        // Listen for current prospect (the one being called) - with protection for auto call
         useEffect(() => {
           if (!currentCall) return;
+          
           const prospectId = currentCall.prospectId;
           const prospectRef = doc(db, "prospects", prospectId);
           const unsubscribeProspect = onSnapshot(prospectRef, (docSnap) => {
+            // Skip listener updates during call processing to prevent data conflicts
+            if (isProcessingCall || isStartingNextCall.current || isEndingCall.current) {
+              console.log("⏸️ Ignoring prospect listener update during processing");
+              return;
+            }
+            
             if (docSnap.exists()) {
-              setCurrentProspect({ ...docSnap.data(), id: docSnap.id } as Prospect);
+              const prospectData = { ...docSnap.data(), id: docSnap.id } as Prospect;
+              
+              // Only update if it's actually a different prospect or significant change
+              if (!currentProspect || currentProspect.id !== prospectData.id || 
+                  currentProspect.status !== prospectData.status) {
+                console.log("👤 Prospect listener: Prospect data updated:", {
+                  prospectId: prospectData.id,
+                  prospectName: prospectData.name,
+                  status: prospectData.status
+                });
+                setCurrentProspect(prospectData);
+              }
             } else {
-              setCurrentProspect(null);
+              if (currentProspect) {
+                console.log("👤 Prospect listener: Prospect no longer exists");
+                setCurrentProspect(null);
+              }
             }
           });
           return () => unsubscribeProspect();
-        }, [currentCall]);
+        }, [currentCall, isProcessingCall]);
 
         // Listen for callable prospects (filtered by status/source/phone)
         useEffect(() => {
@@ -698,8 +738,9 @@ export function useCallSession() {
       console.log("🔄 Refreshing callable prospects before next call...");
       await syncAllData();
 
-      // Get next prospect from queue or refreshed callableProspects
+      // Get next prospect - prioritas: queue yang sudah difilter > callable prospects baru
       let nextProspect = null;
+      let updatedQueue = [...callQueue]; // Copy current queue
       
       console.log("🔍 startNextCall debug:", {
         currentSession: !!currentSession,
@@ -708,20 +749,29 @@ export function useCallSession() {
         currentProspect: currentProspect ? { id: currentProspect.id, name: currentProspect.name } : null
       });
       
-      if (callQueue.length > 0) {
-        nextProspect = callQueue[0];
-        console.log("✅ Using prospect from queue:", { id: nextProspect?.id, name: nextProspect?.name });
+      // Remove current prospect from queue if it's still there
+      if (currentProspect) {
+        updatedQueue = callQueue.filter(p => p.id !== currentProspect.id);
+      }
+      
+      // Check if we have prospects in filtered queue
+      if (updatedQueue.length > 0) {
+        nextProspect = updatedQueue[0];
+        console.log("✅ Using next prospect from filtered queue:", { 
+          id: nextProspect?.id, 
+          name: nextProspect?.name,
+          queueLength: updatedQueue.length 
+        });
       } else if (callableProspects.length > 0) {
-        // Rebuild queue from callable prospects if queue is empty
+        // If no prospect from queue, get from callable prospects (excluding current)
         const availableProspects = callableProspects.filter(p => 
-          // Filter out current prospect if any
           !currentProspect || p.id !== currentProspect.id
         );
         
         if (availableProspects.length > 0) {
           nextProspect = availableProspects[0];
-          setCallQueue(availableProspects); // Rebuild queue
-          console.log("🔄 Rebuilt queue from callable prospects:", {
+          updatedQueue = availableProspects;
+          console.log("🔄 Using prospect from callable prospects:", {
             total: availableProspects.length,
             first: { id: nextProspect.id, name: nextProspect.name }
           });
@@ -729,20 +779,24 @@ export function useCallSession() {
       }
 
       if (!nextProspect) {
+        console.log("❌ No prospects available for calling");
         return { success: false, error: "No prospects available for calling" };
       }
 
       // Validate prospect has required data
       if (!nextProspect.id || !nextProspect.name) {
+        console.error("❌ Invalid prospect data:", nextProspect);
         return { success: false, error: "Invalid prospect data" };
       }
 
-      const phoneNumber = nextProspect.phone || nextProspect.phoneNumber || ""; // Support both phone fields
+      const phoneNumber = nextProspect.phone || nextProspect.phoneNumber || "";
       
       if (!phoneNumber) {
+        console.error("❌ Prospect has no phone number:", nextProspect);
         return { success: false, error: "Prospect has no phone number" };
       }
 
+      // Create call log entry
       const callData = {
         sessionId: currentSession.id!,
         prospectId: nextProspect.id,
@@ -759,24 +813,30 @@ export function useCallSession() {
       const callsRef = collection(db, "call_logs");
       const docRef = await addDoc(callsRef, callData);
 
+      // Update state immediately and atomically to prevent conflicts
       const newCall = { id: docRef.id, ...callData } as CallLog;
+      
+      // CRITICAL: Update all state together in batch to prevent inconsistency
       setCurrentCall(newCall);
       setCurrentProspect(nextProspect);
+      setCallQueue(updatedQueue);
       setCallTimer(0);
 
       // Auto-dial the phone number (if enabled in settings)
       dialPhoneNumber(phoneNumber);
 
-      console.log("Started next call:", {
-        prospect: nextProspect.name,
+      console.log("✅ Started next call successfully:", {
+        prospectId: nextProspect.id,
+        prospectName: nextProspect.name,
         phone: phoneNumber,
         autoDialEnabled: phoneSettings?.autoDialEnabled,
-        session: currentSession.id
+        sessionId: currentSession.id,
+        remainingInQueue: updatedQueue.length - 1
       });
 
       return { success: true, callId: docRef.id };
     } catch (err) {
-      console.error("Error starting call:", err);
+      console.error("❌ Error starting call:", err);
       return { success: false, error: "Failed to start call" };
     } finally {
       // Release locking flags
@@ -909,7 +969,7 @@ export function useCallSession() {
           );
         }
 
-        // Update UI state - clear current call and prospect
+        // Update UI state - clear current call and prospect SETELAH semua database operations selesai
         setCurrentCall(null);
         setCurrentProspect(null);
         setCallTimer(0);
@@ -918,23 +978,39 @@ export function useCallSession() {
         console.log("🔄 Refreshing callable prospects after disposition...");
         await syncAllData();
 
-        // Update call queue - remove the processed prospect and start next call
+        // Update call queue - remove the processed prospect secara konsisten
         let shouldStartNextCall = false;
-        let nextQueue = callQueue;
+        let nextQueue = [...callQueue]; // Copy queue
 
-        // Remove processed prospect from queue if it's in there
-        if (callQueue.length > 0 && callQueue[0].id === targetProspect.id) {
-          nextQueue = callQueue.slice(1);
-          setCallQueue(nextQueue);
-          shouldStartNextCall = nextQueue.length > 0;
-        } else if (callQueue.length > 0) {
-          // If processed prospect wasn't the first in queue, still try next call
+        // Remove processed prospect from queue
+        nextQueue = callQueue.filter(p => p.id !== targetProspect.id);
+        console.log("🔄 Filtered processed prospect from queue:", {
+          processed: targetProspect.name,
+          originalQueueLength: callQueue.length,
+          newQueueLength: nextQueue.length
+        });
+
+        // Update queue state immediately
+        setCallQueue(nextQueue);
+
+        // Determine if we should start next call
+        if (nextQueue.length > 0) {
           shouldStartNextCall = true;
+          console.log("✅ Will start next call from queue:", {
+            nextProspect: nextQueue[0].name,
+            queueLength: nextQueue.length
+          });
         } else if (callableProspects.length > 1) {
-          // If no queue but multiple prospects available, rebuild queue
+          // Rebuild queue from remaining callable prospects (excluding processed one)
           const remainingProspects = callableProspects.filter(p => p.id !== targetProspect.id);
-          setCallQueue(remainingProspects);
-          shouldStartNextCall = remainingProspects.length > 0;
+          if (remainingProspects.length > 0) {
+            setCallQueue(remainingProspects);
+            shouldStartNextCall = true;
+            console.log("🔄 Rebuilt queue from remaining prospects:", {
+              total: remainingProspects.length,
+              nextProspect: remainingProspects[0].name
+            });
+          }
         }
 
         // Auto-start next call if enabled in settings and there are more prospects
