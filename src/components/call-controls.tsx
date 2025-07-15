@@ -15,6 +15,7 @@ import {
   Users,
   CheckCircle,
   XCircle,
+  AlertCircle,
 } from "lucide-react";
 import { useCallSession } from "@/hooks/use-call-session";
 
@@ -43,6 +44,7 @@ export function CallControls({ onCallStatusUpdate }: CallControlsProps) {
     maskPhoneNumber,
     getDispositionOptions,
     phoneSettings,
+    workingScheduleStatus,
   } = useCallSession();
 
   const handleStartSession = async () => {
@@ -196,6 +198,25 @@ export function CallControls({ onCallStatusUpdate }: CallControlsProps) {
                   {formatTime(sessionTimer)}
                 </span>
               </div>
+
+              {/* Working Schedule Status */}
+              {workingScheduleStatus && (
+                <div className={`p-2 rounded-md flex items-center gap-2 ${
+                  workingScheduleStatus.isWorkingTime 
+                    ? "bg-green-50 border border-green-200 text-green-700" 
+                    : "bg-orange-50 border border-orange-200 text-orange-700"
+                }`}>
+                  <div className={`h-2 w-2 rounded-full ${
+                    workingScheduleStatus.isWorkingTime ? "bg-green-500" : "bg-orange-500"
+                  }`} />
+                  <span className="text-xs font-medium">
+                    {workingScheduleStatus.isWorkingTime ? "In working hours" : "Outside working hours"}
+                  </span>
+                  {!workingScheduleStatus.isWorkingTime && (
+                    <AlertCircle className="h-3 w-3" />
+                  )}
+                </div>
+              )}
 
               {/* Session Stats */}
               <div className="grid grid-cols-3 gap-4 text-center">

@@ -21,6 +21,7 @@ import {
   useTelemarketingSettings,
   ProspectStatus,
 } from "@/hooks/use-telemarketing-settings";
+import { checkWorkingSchedule, WorkingScheduleCheck } from "@/lib/working-schedule";
 
 export type SessionStatus = "idle" | "active" | "break" | "ended";
 export type CallStatus =
@@ -108,12 +109,14 @@ export function useCallSession() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDataSynced, setIsDataSynced] = useState(false);
+  const [workingScheduleStatus, setWorkingScheduleStatus] = useState<WorkingScheduleCheck | null>(null);
 
   // Ref untuk menghindari infinite loop
   const lastProspectsLength = useRef(0);
   const isInitialized = useRef(false);
   const prevFiltersRef = useRef(prospectFilters);
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const firstCallTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Mutex/Locking untuk mencegah race condition
   const [isProcessingCall, setIsProcessingCall] = useState(false);
@@ -584,55 +587,22 @@ export function useCallSession() {
     }));
   }, [dispositionStatuses]);
 
-  // Auto-start first call helper
-  const startFirstCall = useCallback(
-    async (session: CallSession, prospects: Prospect[]) => {
-      if (prospects.length === 0) return;
-
-      try {
-        const firstProspect = prospects[0];
-        const phoneNumber = firstProspect.phone || firstProspect.phoneNumber; // Support both phone fields
-
-        const callData = {
-          sessionId: session.id!,
-          prospectId: firstProspect.id!,
-          prospectName: firstProspect.name,
-          prospectPhone: phoneNumber,
-          maskedPhone: maskPhoneNumber(phoneNumber),
-          startTime: Timestamp.now(),
-          duration: 0,
-          status: "calling" as CallStatus,
-          userId: getCurrentUserId(),
-          createdAt: Timestamp.now(),
-        };
-
-        const callsRef = collection(db, "call_logs");
-        const docRef = await addDoc(callsRef, callData);
-
-        const newCall = { id: docRef.id, ...callData } as CallLog;
-        setCurrentCall(newCall);
-        setCurrentProspect(firstProspect);
-        setCallTimer(0);
-
-        // Auto-dial the phone number (if enabled in settings)
-        dialPhoneNumber(phoneNumber);
-
-        console.log("Auto-started first call:", {
-          prospect: firstProspect.name,
-          phone: phoneNumber,
-          autoDialEnabled: phoneSettings?.autoDialEnabled,
-          session: session.id
-        });
-      } catch (err) {
-        console.error("Error auto-starting first call:", err);
-      }
-    },
-    [user, maskPhoneNumber, dialPhoneNumber, getCurrentUserId]
-  );
-
   // SOP 3: Mulai sesi dengan timer untuk sesi
   const startSession = useCallback(async () => {
     if (!getCurrentUserId()) return { success: false, error: "User not authenticated" };
+
+    // Check working schedule first
+    const scheduleCheck = checkWorkingSchedule(phoneSettings);
+    if (!scheduleCheck.isWorkingTime) {
+      console.warn("⏰ Cannot start session - outside working hours:", scheduleCheck.reason);
+      return {
+        success: false,
+        error: `Cannot start session: ${scheduleCheck.reason}`,
+        scheduleInfo: scheduleCheck
+      };
+    }
+
+    console.log("✅ Working schedule check passed - starting session");
 
     try {
       setLoading(true);
@@ -672,14 +642,13 @@ export function useCallSession() {
 
       console.log("🚀 Session started:", {
         sessionId: docRef.id,
-        prospects: availableProspects.length,
+        totalProspects: availableProspects.length,
+        firstProspectName: availableProspects[0]?.name,
+        queueSet: true,
         timestamp: new Date().toISOString(),
       });
 
-      // Auto-start first call setelah session dimulai
-      setTimeout(async () => {
-        await startFirstCall(newSession, availableProspects);
-      }, 500);
+      console.log("ℹ️ First call will be triggered by useEffect when state is ready");
 
       return { success: true, sessionId: docRef.id };
     } catch (err) {
@@ -689,7 +658,7 @@ export function useCallSession() {
     } finally {
       setLoading(false);
     }
-  }, [getCurrentUserId, syncAllData, startFirstCall]);
+  }, [getCurrentUserId, syncAllData, phoneSettings, prospectFilters]);
 
   // Start break
   const startBreak = useCallback(
@@ -774,6 +743,17 @@ export function useCallSession() {
       return { success: false, error: "No active session" };
     }
 
+    // Check working schedule before starting call
+    const scheduleCheck = checkWorkingSchedule(phoneSettings);
+    if (!scheduleCheck.isWorkingTime) {
+      console.warn("⏰ Cannot start call - outside working hours:", scheduleCheck.reason);
+      return {
+        success: false,
+        error: `Cannot start call: ${scheduleCheck.reason}`,
+        scheduleInfo: scheduleCheck
+      };
+    }
+
     // Set locking flags
     isStartingNextCall.current = true;
     setIsProcessingCall(true);
@@ -784,48 +764,82 @@ export function useCallSession() {
       await syncAllData();
 
       // Get next prospect - prioritas: queue yang sudah difilter > callable prospects baru
-      let nextProspect = null;
+      let nextProspect: Prospect | null = null;
       let updatedQueue = [...callQueue]; // Copy current queue
       
       console.log("🔍 startNextCall debug:", {
         currentSession: !!currentSession,
         callQueueLength: callQueue.length,
         callableProspectsLength: callableProspects.length,
-        currentProspect: currentProspect ? { id: currentProspect.id, name: currentProspect.name } : null
+        currentProspect: currentProspect ? { id: currentProspect.id, name: currentProspect.name } : null,
+        currentQueue: callQueue.slice(0, 3).map(p => ({ id: p.id, name: p.name })),
+        isFirstCall: !currentProspect
       });
       
-      // Remove current prospect from queue if it's still there
-      if (currentProspect) {
-        updatedQueue = callQueue.filter(p => p.id !== currentProspect.id);
+      // IMPORTANT: For first call (no currentProspect), take first from queue
+      // For subsequent calls, exclude current prospect
+      let availableFromQueue, availableFromCallable;
+      
+      if (!currentProspect) {
+        // First call - take first prospect from queue
+        availableFromQueue = callQueue;
+        availableFromCallable = callableProspects;
+        console.log("🔄 First call mode - using all prospects");
+      } else {
+        // Subsequent calls - exclude current prospect
+        availableFromQueue = callQueue.filter(p => p.id !== currentProspect.id);
+        availableFromCallable = callableProspects.filter(p => p.id !== currentProspect.id);
+        console.log("🔄 Subsequent call mode - excluding current prospect");
       }
       
-      // Check if we have prospects in filtered queue
-      if (updatedQueue.length > 0) {
-        nextProspect = updatedQueue[0];
+      console.log("🔍 Available prospects after filtering:", {
+        fromQueue: availableFromQueue.length,
+        fromCallable: availableFromCallable.length,
+        mode: !currentProspect ? 'first_call' : 'subsequent_call',
+        excludedCurrentId: currentProspect?.id || 'none'
+      });
+      
+      // Check if we have prospects in filtered queue (excluding current)
+      if (availableFromQueue.length > 0) {
+        nextProspect = availableFromQueue[0];
+        updatedQueue = availableFromQueue; // Update queue to only available prospects
         console.log("✅ Using next prospect from filtered queue:", { 
           id: nextProspect?.id, 
           name: nextProspect?.name,
           queueLength: updatedQueue.length 
         });
-      } else if (callableProspects.length > 0) {
+      } else if (availableFromCallable.length > 0) {
         // If no prospect from queue, get from callable prospects (excluding current)
-        const availableProspects = callableProspects.filter(p => 
-          !currentProspect || p.id !== currentProspect.id
-        );
-        
-        if (availableProspects.length > 0) {
-          nextProspect = availableProspects[0];
-          updatedQueue = availableProspects;
-          console.log("🔄 Using prospect from callable prospects:", {
-            total: availableProspects.length,
-            first: { id: nextProspect.id, name: nextProspect.name }
-          });
-        }
+        nextProspect = availableFromCallable[0];
+        updatedQueue = availableFromCallable;
+        console.log("🔄 Using prospect from callable prospects:", {
+          total: availableFromCallable.length,
+          first: { id: nextProspect.id, name: nextProspect.name }
+        });
       }
 
       if (!nextProspect) {
         console.log("❌ No prospects available for calling");
         return { success: false, error: "No prospects available for calling" };
+      }
+
+      // SAFETY CHECK: Ensure we're not calling the same prospect twice
+      if (currentProspect && nextProspect.id === currentProspect.id) {
+        console.warn("⚠️ Detected duplicate prospect call attempt, finding alternative...");
+        
+        // Try to find a different prospect
+        const alternativeProspects = callableProspects.filter(p => 
+          p.id !== currentProspect.id && (!nextProspect || p.id !== nextProspect.id)
+        );
+        
+        if (alternativeProspects.length > 0) {
+          nextProspect = alternativeProspects[0];
+          updatedQueue = alternativeProspects;
+          console.log("✅ Found alternative prospect:", nextProspect.name);
+        } else {
+          console.log("❌ No alternative prospects available, stopping to prevent duplicate");
+          return { success: false, error: "No alternative prospects available to prevent duplicate call" };
+        }
       }
 
       // Validate prospect has required data
@@ -1086,20 +1100,34 @@ export function useCallSession() {
         setCurrentProspect(null);
         setCallTimer(0);
 
-        // Refresh callable prospects setelah disposisi
+        // Refresh callable prospects setelah disposisi (tanpa mengubah current queue)
         console.log("🔄 Refreshing callable prospects after disposition...");
+        const currentQueueBackup = [...callQueue]; // Backup current queue
         await syncAllData();
+        
+        console.log("🔍 Queue backup vs current:", {
+          backupLength: currentQueueBackup.length,
+          currentQueueLength: callQueue.length,
+          backupFirst: currentQueueBackup[0]?.name,
+          currentFirst: callQueue[0]?.name
+        });
 
         // Update call queue - remove the processed prospect secara konsisten
         let shouldStartNextCall = false;
-        let nextQueue = [...callQueue]; // Copy queue
+        let nextQueue = currentQueueBackup.filter(p => p.id !== targetProspect.id); // Use backup instead of current
 
-        // Remove processed prospect from queue
-        nextQueue = callQueue.filter(p => p.id !== targetProspect.id);
+        console.log("🔍 Queue state before filtering:", {
+          originalQueueLength: currentQueueBackup.length,
+          originalQueue: currentQueueBackup.slice(0, 3).map(p => ({ id: p.id, name: p.name })),
+          targetProspectId: targetProspect.id,
+          targetProspectName: targetProspect.name
+        });
+
         console.log("🔄 Filtered processed prospect from queue:", {
           processed: targetProspect.name,
-          originalQueueLength: callQueue.length,
-          newQueueLength: nextQueue.length
+          originalQueueLength: currentQueueBackup.length,
+          newQueueLength: nextQueue.length,
+          nextQueuePreview: nextQueue.slice(0, 3).map(p => ({ id: p.id, name: p.name }))
         });
 
         // Update queue state immediately
@@ -1482,6 +1510,62 @@ export function useCallSession() {
     }
   }, [phoneSettings?.defaultStatusFilter, phoneSettings?.defaultSourceFilter]);
 
+  // Monitor working schedule status
+  useEffect(() => {
+    const checkSchedule = () => {
+      const scheduleCheck = checkWorkingSchedule(phoneSettings);
+      setWorkingScheduleStatus(scheduleCheck);
+      
+      console.log("⏰ Working schedule check:", {
+        isWorkingTime: scheduleCheck.isWorkingTime,
+        reason: scheduleCheck.reason,
+        currentTime: scheduleCheck.currentTime.toLocaleString(),
+        serverTime: scheduleCheck.serverTime
+      });
+    };
+
+    // Initial check
+    checkSchedule();
+
+    // Check every minute
+    const interval = setInterval(checkSchedule, 60000);
+
+    return () => clearInterval(interval);
+  }, [phoneSettings]);
+
+  // Handle first call when session starts and queue is ready
+  useEffect(() => {
+    if (currentSession && currentSession.status === "active" && 
+        callQueue.length > 0 && !currentCall && !currentProspect && 
+        !loading && !isProcessingCall && workingScheduleStatus?.isWorkingTime) {
+      
+      const delayMs = (phoneSettings?.callDelaySeconds || 1) * 1000;
+      console.log("🔄 useEffect detected session ready for first call:", {
+        sessionId: currentSession.id,
+        queueLength: callQueue.length,
+        hasCurrentCall: !!currentCall,
+        hasCurrentProspect: !!currentProspect,
+        isWorkingTime: workingScheduleStatus.isWorkingTime,
+        delayMs
+      });
+
+      // Clear any existing timeout
+      if (firstCallTimeoutRef.current) {
+        clearTimeout(firstCallTimeoutRef.current);
+      }
+
+      firstCallTimeoutRef.current = setTimeout(async () => {
+        console.log("🔄 useEffect triggering first call via startNextCall...");
+        try {
+          const result = await startNextCall();
+          console.log("🔄 useEffect first call result:", result.success ? "✅ Success" : `❌ ${result.error}`);
+        } catch (error) {
+          console.error("❌ useEffect first call error:", error);
+        }
+      }, delayMs);
+    }
+  }, [currentSession, callQueue.length, currentCall, currentProspect, loading, isProcessingCall, workingScheduleStatus?.isWorkingTime, phoneSettings?.callDelaySeconds, startNextCall]);
+
   return {
     // State
     currentSession,
@@ -1520,5 +1604,8 @@ export function useCallSession() {
     prospectFilters,
     getSessionStats,
     getSessionDuration,
+    
+    // Working schedule
+    workingScheduleStatus,
   };
 }
