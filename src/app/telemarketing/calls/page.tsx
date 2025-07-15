@@ -31,7 +31,10 @@ import { useProspects } from "@/hooks/use-prospects";
 import { Button } from "@/components/ui/button";
 import { Play } from "lucide-react";
 
+import { useAuth } from "@/hooks/use-auth";
+
 export default function TelemarketingCallsPage() {
+  const { user } = useAuth();
   const {
     currentSession,
     currentCall,
@@ -49,6 +52,16 @@ export default function TelemarketingCallsPage() {
   const { prospects } = useProspects();
 
   const [callNotes, setCallNotes] = useState("");
+
+  // Debug useEffect to monitor user in page component
+  useEffect(() => {
+    console.log("🔍 User state in calls page:", {
+      user,
+      isAuthenticated: !!user,
+      userId: user?.id,
+      userEmail: user?.email
+    });
+  }, [user]);
 
   const handleCallStatusUpdate = useCallback((status: string, notes?: string) => {
     console.log("Call completed:", { status, notes });
@@ -118,6 +131,50 @@ export default function TelemarketingCallsPage() {
         </header>
 
         <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
+          {/* Debug Card - Only show in development */}
+          {process.env.NODE_ENV === 'development' && (
+            <Card className="border-yellow-200 bg-yellow-50">
+              <CardHeader>
+                <CardTitle className="text-sm text-yellow-800">Debug Info</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <strong>Current User:</strong>
+                    <pre className="text-xs mt-1 p-2 bg-white rounded">
+                      {JSON.stringify({
+                        id: user?.id,
+                        email: user?.email,
+                        fullName: user?.fullName,
+                        username: user?.username,
+                        authenticated: !!user,
+                        userKeysAvailable: user ? Object.keys(user) : null
+                      }, null, 2)}
+                    </pre>
+                  </div>
+                  <div>
+                    <strong>Current Prospect:</strong>
+                    <pre className="text-xs mt-1 p-2 bg-white rounded">
+                      {JSON.stringify({
+                        id: currentProspect?.id,
+                        name: currentProspect?.name,
+                        assignedTo: currentProspect?.assignedTo,
+                        status: currentProspect?.status
+                      }, null, 2)}
+                    </pre>
+                  </div>
+                </div>
+                {!user && (
+                  <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded">
+                    <p className="text-red-700 text-sm">
+                      ⚠️ No user logged in. Please login first to test auto-assign feature.
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {/* Current Filter Display */}
           <Card>
             <CardHeader>
@@ -359,6 +416,7 @@ export default function TelemarketingCallsPage() {
                       <li>
                         • Prospect status is automatically mapped and updated
                       </li>
+                      <li>• Prospect is automatically assigned to the calling agent</li>
                       <li>• Call duration and notes are recorded</li>
                       <li>• System moves to next prospect automatically</li>
                     </ul>

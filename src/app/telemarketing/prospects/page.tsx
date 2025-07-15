@@ -250,26 +250,14 @@ export default function TelemarketingProspectsPage() {
     return result;
   };
 
-  // Calculate statistics
+  // Calculate statistics based on filteredProspects (which includes all active filters)
   const stats = useMemo(() => {
     const total = filteredProspects.length;
-    const contacted = filteredProspects.filter((p) =>
-      [
-        "contacted",
-        "interested",
-        "not_interested",
-        "converted",
-        "follow_up",
-      ].includes(p.status)
-    ).length;
-    const interested = filteredProspects.filter(
-      (p) => p.status === "interested"
-    ).length;
-    const converted = filteredProspects.filter(
-      (p) => p.status === "converted"
-    ).length;
+    const responded = filteredProspects.filter((p) => p.status === "contacted").length;
+    const callback = filteredProspects.filter((p) => p.status === "follow_up").length;
+    const notInterested = filteredProspects.filter((p) => p.status === "not_interested").length;
 
-    return { total, contacted, interested, converted };
+    return { total, responded, callback, notInterested };
   }, [filteredProspects]);
 
   if (loading) {
@@ -330,14 +318,14 @@ export default function TelemarketingProspectsPage() {
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Contacted</CardTitle>
+                <CardTitle className="text-sm font-medium">Respon</CardTitle>
                 <Phone className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stats.contacted}</div>
+                <div className="text-2xl font-bold">{stats.responded}</div>
                 <p className="text-xs text-muted-foreground">
                   {stats.total > 0
-                    ? Math.round((stats.contacted / stats.total) * 100)
+                    ? Math.round((stats.responded / stats.total) * 100)
                     : 0}
                   % of total
                 </p>
@@ -347,33 +335,33 @@ export default function TelemarketingProspectsPage() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
-                  Interested
+                  Callback
                 </CardTitle>
                 <Tag className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stats.interested}</div>
+                <div className="text-2xl font-bold">{stats.callback}</div>
                 <p className="text-xs text-muted-foreground">
-                  {stats.contacted > 0
-                    ? Math.round((stats.interested / stats.contacted) * 100)
+                  {stats.total > 0
+                    ? Math.round((stats.callback / stats.total) * 100)
                     : 0}
-                  % of contacted
+                  % of total
                 </p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Converted</CardTitle>
+                <CardTitle className="text-sm font-medium">Tidak Minat</CardTitle>
                 <Calendar className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stats.converted}</div>
+                <div className="text-2xl font-bold">{stats.notInterested}</div>
                 <p className="text-xs text-muted-foreground">
-                  {stats.interested > 0
-                    ? Math.round((stats.converted / stats.interested) * 100)
+                  {stats.total > 0
+                    ? Math.round((stats.notInterested / stats.total) * 100)
                     : 0}
-                  % conversion rate
+                  % of total
                 </p>
               </CardContent>
             </Card>

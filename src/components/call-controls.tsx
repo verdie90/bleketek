@@ -69,6 +69,14 @@ export function CallControls({ onCallStatusUpdate }: CallControlsProps) {
 
   const handleEndCall = async (dispositionId: string, notes?: string) => {
     try {
+      console.log("🔍 handleEndCall triggered with:", {
+        dispositionId,
+        notes,
+        currentCall: currentCall?.id,
+        currentProspect: currentProspect?.id,
+        currentProspectName: currentProspect?.name
+      });
+      
       // Show info about auto dial status when processing disposition
       if (phoneSettings?.autoDialEnabled === false) {
         console.log("⚠️ Processing disposition with auto-dial disabled");
@@ -79,6 +87,8 @@ export function CallControls({ onCallStatusUpdate }: CallControlsProps) {
       }
       
       const result = await endCall(dispositionId, notes);
+      console.log("🔍 endCall result:", result);
+      
       if (!result.success) {
         alert(result.error || "Failed to process call disposition");
       } else {

@@ -120,6 +120,51 @@ export function useCallSession() {
   const isStartingNextCall = useRef(false);
   const isEndingCall = useRef(false);
 
+  // Helper function to get consistent user ID
+  const getCurrentUserId = useCallback((): string => {
+    console.log("🔍 getCurrentUserId called with user:", {
+      user,
+      userType: typeof user,
+      userKeys: user ? Object.keys(user) : null,
+      userId: user?.id,
+      userUid: (user as any)?.uid,
+      userEmail: user?.email,
+      userUsername: user?.username
+    });
+    
+    if (!user) {
+      console.warn("⚠️ No user object available");
+      return "";
+    }
+    
+    // Try different possible user ID fields in priority order
+    // 1. id field (primary)
+    // 2. email (fallback - unique identifier)
+    // 3. username (secondary fallback)
+    // 4. uid (for Firebase compatibility)
+    let id = user.id || user.email || user.username || (user as any).uid || "";
+    
+    // Last resort: if still no ID, create a temporary one based on user data
+    if (!id && user.fullName) {
+      id = `user_${user.fullName.replace(/\s+/g, '_').toLowerCase()}_${Date.now()}`;
+      console.warn("⚠️ Using generated temporary user ID:", id);
+    }
+    
+    console.log("🔍 getCurrentUserId returning:", id);
+    return id;
+  }, [user]);
+
+  // Debug useEffect to monitor user changes
+  useEffect(() => {
+    console.log("🔍 User object changed in use-call-session:", {
+      user,
+      isAuthenticated: !!user,
+      userId: user?.id,
+      userEmail: user?.email,
+      fullName: user?.fullName
+    });
+  }, [user]);
+
   // SOP 5: Helper functions menggunakan sumber database
 
   // SOP: Sinkronisasi semua data dari database
@@ -557,7 +602,7 @@ export function useCallSession() {
           startTime: Timestamp.now(),
           duration: 0,
           status: "calling" as CallStatus,
-          userId: user!.id,
+          userId: getCurrentUserId(),
           createdAt: Timestamp.now(),
         };
 
@@ -582,12 +627,12 @@ export function useCallSession() {
         console.error("Error auto-starting first call:", err);
       }
     },
-    [user, maskPhoneNumber, dialPhoneNumber]
+    [user, maskPhoneNumber, dialPhoneNumber, getCurrentUserId]
   );
 
   // SOP 3: Mulai sesi dengan timer untuk sesi
   const startSession = useCallback(async () => {
-    if (!user?.id) return { success: false, error: "User not authenticated" };
+    if (!getCurrentUserId()) return { success: false, error: "User not authenticated" };
 
     try {
       setLoading(true);
@@ -605,7 +650,7 @@ export function useCallSession() {
 
       // Buat session baru
       const sessionData = {
-        userId: user.id,
+        userId: getCurrentUserId(),
         startTime: Timestamp.now(),
         status: "active" as SessionStatus,
         totalCalls: availableProspects.length,
@@ -644,7 +689,7 @@ export function useCallSession() {
     } finally {
       setLoading(false);
     }
-  }, [user?.id, syncAllData, startFirstCall]);
+  }, [getCurrentUserId, syncAllData, startFirstCall]);
 
   // Start break
   const startBreak = useCallback(
@@ -806,7 +851,7 @@ export function useCallSession() {
         startTime: Timestamp.now(),
         duration: 0,
         status: "calling" as CallStatus,
-        userId: user!.id,
+        userId: getCurrentUserId(),
         createdAt: Timestamp.now(),
       };
 
@@ -843,9 +888,9 @@ export function useCallSession() {
       isStartingNextCall.current = false;
       setIsProcessingCall(false);
     }
-  }, [currentSession, callQueue, callableProspects, currentProspect, user, maskPhoneNumber, dialPhoneNumber, phoneSettings, syncAllData, isProcessingCall]);
+  }, [currentSession, callQueue, callableProspects, currentProspect, user, maskPhoneNumber, dialPhoneNumber, phoneSettings, syncAllData, isProcessingCall, getCurrentUserId]);
 
-  // SOP 4: Update status sesuai yang ada di database ketika call disposition diklik
+  // SOP 4: Update status dan assignedTo prospect sesuai yang ada di database ketika call disposition diklik
   const endCall = useCallback(
     async (dispositionId: string, notes?: string) => {
       // Prevent race condition - check if already ending a call
@@ -857,6 +902,24 @@ export function useCallSession() {
       // Set locking flags
       isEndingCall.current = true;
       setIsProcessingCall(true);
+
+      // Debug log for user ID
+      console.log("🔍 endCall - User ID debug:", {
+        currentUserId: getCurrentUserId(),
+        userObject: user,
+        userAvailable: !!user
+      });
+      
+      console.log("🔍 endCall - Initial state:", {
+        dispositionId,
+        notes,
+        currentCallId: currentCall?.id,
+        currentProspectId: currentProspect?.id,
+        currentProspectName: currentProspect?.name,
+        currentProspectAssignedTo: currentProspect?.assignedTo,
+        callQueueLength: callQueue.length,
+        callableProspectsLength: callableProspects.length
+      });
 
       try {
         // Find the disposition from database
@@ -929,7 +992,7 @@ export function useCallSession() {
               status: "completed" as CallStatus,
               disposition: selectedDisposition.name,
               notes: notes || "",
-              userId: (user as any)?.uid || "",
+              userId: getCurrentUserId(),
               createdAt: Timestamp.now(),
             };
 
@@ -937,15 +1000,50 @@ export function useCallSession() {
           }
         }
 
-        // Update prospect status
+        // Update prospect status and assignedTo field
         const targetStatus = mapDispositionToProspectStatus(selectedDisposition.name);
-        await updateProspect(targetProspect.id, { status: targetStatus });
+        
+        // Debug user object structure
+        console.log("🔍 User object debug:", {
+          user,
+          userType: typeof user,
+          userKeys: user ? Object.keys(user) : null,
+          hasId: user ? 'id' in user : false,
+          hasUid: user ? 'uid' in user : false,
+          userId: user?.id,
+          userUid: (user as any)?.uid
+        });
+        
+        // Get user ID - try multiple possible fields
+        const userId = getCurrentUserId();
+        
+        if (!userId) {
+          console.error("❌ No valid user ID available for assignment");
+          return { success: false, error: "No user authenticated for assignment" };
+        }
+        
+        const updateData: Partial<Prospect> = { 
+          status: targetStatus,
+          assignedTo: userId // Assign prospect to the agent who made the call
+        };
+        
+        console.log("📝 Updating prospect with data:", updateData);
+        const updateResult = await updateProspect(targetProspect.id, updateData);
+        
+        if (!updateResult.success) {
+          console.error("❌ Failed to update prospect:", updateResult.error);
+          return { success: false, error: `Failed to update prospect: ${updateResult.error}` };
+        }
+        
+        console.log("✅ Prospect updated successfully with status and assignedTo");
 
         console.log("📞 Call/Disposition completed:", {
           dispositionFromDB: selectedDisposition.name,
           mappedStatus: targetStatus,
           prospectId: targetProspect.id,
           prospectName: targetProspect.name,
+          assignedTo: userId,
+          userObjectAvailable: !!user,
           hadActiveCall: !!currentCall,
           source: "database_status",
         });
@@ -1080,6 +1178,7 @@ export function useCallSession() {
       phoneSettings,
       syncAllData,
       isProcessingCall,
+      getCurrentUserId,
     ]
   );
 

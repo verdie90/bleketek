@@ -85,12 +85,16 @@ export function useAuth() {
       const data = await response.json();
 
       if (data.success) {
+        console.log("✅ Token verification successful, user data:", data.user);
+        
         setAuthState({
           user: data.user,
           isAuthenticated: true,
           isLoading: false,
           error: null,
         });
+        
+        console.log("✅ Auth state updated from token verification");
       } else {
         logout();
       }
@@ -153,6 +157,8 @@ export function useAuth() {
           // Store JWT token
           localStorage.setItem("auth_token", data.token);
 
+          console.log("✅ Login successful, user data:", data.user);
+
           // Update auth state
           setAuthState({
             user: data.user,
@@ -160,6 +166,8 @@ export function useAuth() {
             isLoading: false,
             error: null,
           });
+
+          console.log("✅ Auth state updated with user:", data.user);
 
           return { success: true, user: data.user };
         } else {

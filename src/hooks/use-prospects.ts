@@ -157,14 +157,27 @@ export const useProspects = () => {
   // Update a prospect
   const updateProspect = async (id: string, updateData: Partial<Prospect>) => {
     try {
+      console.log("🔍 updateProspect called with:", {
+        prospectId: id,
+        updateData,
+        timestamp: new Date().toISOString()
+      });
+      
       const prospectRef = doc(db, "prospects", id);
-      await updateDoc(prospectRef, {
+      const finalUpdateData = {
         ...updateData,
         lastUpdated: Timestamp.now(),
-      });
+      };
+      
+      console.log("🔍 Final update data being sent to Firestore:", finalUpdateData);
+      
+      await updateDoc(prospectRef, finalUpdateData);
+      
+      console.log("✅ Prospect updated successfully in Firestore");
+      
       return { success: true };
     } catch (err: any) {
-      console.error("Error updating prospect:", err);
+      console.error("❌ Error updating prospect:", err);
       return {
         success: false,
         error: err.message || "Failed to update prospect",

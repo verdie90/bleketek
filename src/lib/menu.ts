@@ -54,6 +54,10 @@ export const data = {
           title: "Phone Calls",
           url: "/telemarketing/calls",
         },
+        {
+          title: "Call Logs",
+          url: "/telemarketing/call-logs",
+        },
       ],
     },
     {
