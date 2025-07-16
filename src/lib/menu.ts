@@ -65,6 +65,10 @@ export const data = {
           title: "Create Estimation",
           url: "/estimations/create",
         },
+        {
+          title: "Estimation History",
+          url: "/estimations/history",
+        },
       ],
     },
     // Temporarily disabled - pages not implemented yet
@@ -209,6 +213,10 @@ export const data = {
         {
           title: "Telemarketing Settings",
           url: "/settings/telemarketing",
+        },
+        {
+          title: "Estimation Settings",
+          url: "/settings/estimation",
         },
       ],
     },
