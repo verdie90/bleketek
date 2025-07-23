@@ -1697,14 +1697,6 @@ export function useCallSession() {
       autoFirstCallEnabled // Add this condition to prevent auto first call
     ) {
       const delayMs = (phoneSettings?.callDelaySeconds || 1) * 1000;
-      console.log("🔄 useEffect detected session ready for first call:", {
-        sessionId: currentSession.id,
-        queueLength: callQueue.length,
-        hasCurrentCall: !!currentCall,
-        hasCurrentProspect: !!currentProspect,
-        isWorkingTime: workingScheduleStatus.isWorkingTime,
-        delayMs,
-      });
 
       // Clear any existing timeout
       if (firstCallTimeoutRef.current) {
@@ -1712,7 +1704,6 @@ export function useCallSession() {
       }
 
       firstCallTimeoutRef.current = setTimeout(async () => {
-        console.log("🔄 useEffect triggering first call via startNextCall...");
         try {
           const result = await startNextCall();
           console.log(

@@ -98,46 +98,9 @@ export default function TelemarketingProspectsPage() {
   // Debug: Log prospects with lastContactDate
   useEffect(() => {
     const prospectsWithLastContact = prospects.filter((p) => p.lastContactDate);
-    console.log(
-      "📊 Prospects in UI with lastContactDate:",
-      prospectsWithLastContact.map((p) => ({
-        id: p.id,
-        name: p.name,
-        lastContactDate: p.lastContactDate,
-        lastContactDateType: typeof p.lastContactDate,
-        lastContactDateFormatted: p.lastContactDate?.toDate?.()?.toISOString(),
-        hasToDateMethod: typeof p.lastContactDate?.toDate === "function",
-      }))
-    );
-    console.log(
-      "📊 Total prospects:",
-      prospects.length,
-      "With lastContactDate:",
-      prospectsWithLastContact.length
-    );
 
     // Debug: Log prospects with assignedTo
     const prospectsWithAssignment = prospects.filter((p) => p.assignedTo);
-    console.log(
-      "👤 Prospects with assignedTo:",
-      prospectsWithAssignment.map((p) => ({
-        id: p.id,
-        name: p.name,
-        assignedTo: p.assignedTo,
-        assignedToType: typeof p.assignedTo,
-      }))
-    );
-
-    // Debug: Log available users
-    console.log(
-      "👥 Available users:",
-      users.map((u) => ({
-        id: u.id,
-        displayName: u.displayName,
-        email: u.email,
-        isActive: u.isActive,
-      }))
-    );
   }, [prospects, users]);
 
   // Helper functions to get labels from database
@@ -162,18 +125,6 @@ export default function TelemarketingProspectsPage() {
 
   const getAssignedToLabel = (userId: string) => {
     if (!userId) return "Unassigned";
-
-    // Debug logging to see what's in users array
-    console.log(
-      "🔍 Looking for user ID:",
-      userId,
-      "in users array:",
-      users.map((u) => ({
-        id: u.id,
-        displayName: u.displayName,
-        email: u.email,
-      }))
-    );
 
     const user = users.find((u) => u.id === userId);
     if (!user) {
@@ -312,7 +263,11 @@ export default function TelemarketingProspectsPage() {
   const handleSaveProspect = async (data: any) => {
     let result;
     if (editingProspect) {
-      result = await updateProspect(editingProspect.id, data);
+      // Always update lastContactDate when editing
+      result = await updateProspect(editingProspect.id, {
+        ...data,
+        lastContactDate: Timestamp.now(),
+      });
     } else {
       result = await addProspect(data);
     }
@@ -327,15 +282,32 @@ export default function TelemarketingProspectsPage() {
   // Calculate statistics based on filteredProspects (which includes all active filters)
   const stats = useMemo(() => {
     const total = filteredProspects.length;
-    const responded = filteredProspects.filter(
-      (p) => p.status === "contacted"
-    ).length;
-    const callback = filteredProspects.filter(
-      (p) => p.status === "follow_up"
-    ).length;
-    const notInterested = filteredProspects.filter(
-      (p) => p.status === "not_interested"
-    ).length;
+    // Anggap status respon bisa berupa 'contacted', 'responded', 'respon' (case-insensitive)
+    const responded = filteredProspects.filter((p) => {
+      const status = (p.status || "").toLowerCase();
+      return (
+        status.includes("respon") ||
+        status === "contacted" ||
+        status === "responded"
+      );
+    }).length;
+    const callback = filteredProspects.filter((p) => {
+      const status = (p.status || "").toLowerCase();
+      return (
+        status.includes("callback") ||
+        status.includes("janji") ||
+        status === "follow_up"
+      );
+    }).length;
+    const notInterested = filteredProspects.filter((p) => {
+      const status = (p.status || "").toLowerCase();
+      return (
+        status.includes("tidak minat") ||
+        status.includes("tidak tertarik") ||
+        status === "not_interested" ||
+        status === "not interested"
+      );
+    }).length;
 
     return { total, responded, callback, notInterested };
   }, [filteredProspects]);
@@ -640,18 +612,6 @@ export default function TelemarketingProspectsPage() {
                           </TableCell>
                           <TableCell>
                             {(() => {
-                              console.log(
-                                "🔍 Rendering lastContactDate for prospect:",
-                                {
-                                  name: prospect.name,
-                                  lastContactDate: prospect.lastContactDate,
-                                  type: typeof prospect.lastContactDate,
-                                  hasToDate:
-                                    typeof prospect.lastContactDate?.toDate ===
-                                    "function",
-                                }
-                              );
-
                               if (prospect.lastContactDate) {
                                 try {
                                   return format(
@@ -659,11 +619,6 @@ export default function TelemarketingProspectsPage() {
                                     "MMM dd, yyyy"
                                   );
                                 } catch (error) {
-                                  console.error(
-                                    "❌ Error formatting lastContactDate:",
-                                    error,
-                                    prospect.lastContactDate
-                                  );
                                   return "Invalid Date";
                                 }
                               }
@@ -709,33 +664,6 @@ export default function TelemarketingProspectsPage() {
                                 >
                                   <Edit className="mr-2 h-4 w-4" />
                                   Edit
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={async () => {
-                                    console.log(
-                                      "🔧 Test: Updating lastContactDate manually for prospect:",
-                                      prospect.name
-                                    );
-                                    const result = await updateProspect(
-                                      prospect.id!,
-                                      {
-                                        lastContactDate: Timestamp.now(),
-                                      }
-                                    );
-                                    console.log("🔧 Test result:", result);
-                                    if (result.success) {
-                                      alert(
-                                        `LastContactDate updated for ${prospect.name}`
-                                      );
-                                    } else {
-                                      alert(
-                                        `Failed to update: ${result.error}`
-                                      );
-                                    }
-                                  }}
-                                >
-                                  <Calendar className="mr-2 h-4 w-4" />
-                                  Test Update Contact
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                   className="text-destructive"

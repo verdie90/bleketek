@@ -206,19 +206,12 @@ export default function CreateEstimationPage() {
   const fetchDebtTypes = async () => {
     try {
       setDebtTypesLoading(true);
-      console.log("Fetching debt types from Firestore...");
 
       const [ccSnap, ktaSnap, olSnap] = await Promise.all([
         getDocs(collection(db, "credit_cards")),
         getDocs(collection(db, "kta")),
         getDocs(collection(db, "online_loans")),
       ]);
-
-      console.log("Firestore snapshots received:", {
-        creditCards: ccSnap.docs.length,
-        kta: ktaSnap.docs.length,
-        onlineLoans: olSnap.docs.length,
-      });
 
       const cc = ccSnap.docs
         .filter((doc) => doc.data().isActive !== false)
@@ -258,7 +251,6 @@ export default function CreateEstimationPage() {
 
       setDebtTypes([...cc, ...kta, ...ol]);
       setDebtTypesLoading(false);
-      console.log("Debt types loaded successfully:", [...cc, ...kta, ...ol]);
     } catch (error) {
       console.error("Error fetching debt types:", error);
       toast.error(
@@ -565,41 +557,11 @@ export default function CreateEstimationPage() {
       // Import PDF libraries
       const { default: jsPDF } = await import("jspdf");
 
-      console.log("jsPDF imported successfully");
-
       // Import autotable - side effect should extend jsPDF
       const autoTableModule = await import("jspdf-autotable");
 
-      console.log("jspdf-autotable module imported:", !!autoTableModule);
-      console.log("autoTableModule keys:", Object.keys(autoTableModule));
-
       // Create document
       const doc = new jsPDF();
-
-      console.log("=== PDF Debug Info ===");
-      console.log("jsPDF version:", (jsPDF as any).version || "unknown");
-      console.log("doc instanceof jsPDF:", doc instanceof jsPDF);
-      console.log("doc.autoTable available:", typeof doc.autoTable);
-      console.log(
-        "jsPDF.API.autoTable available:",
-        typeof (jsPDF as any).API?.autoTable
-      );
-      console.log(
-        "Document methods:",
-        Object.getOwnPropertyNames(doc)
-          .filter((name) => typeof (doc as any)[name] === "function")
-          .slice(0, 10)
-      );
-      console.log(
-        "Document prototype methods:",
-        Object.getOwnPropertyNames(Object.getPrototypeOf(doc))
-          .filter(
-            (name) =>
-              typeof (Object.getPrototypeOf(doc) as any)[name] === "function"
-          )
-          .slice(0, 10)
-      );
-      console.log("=======================");
 
       // If autoTable is not available, create basic table manually
       const createTableManually = (
@@ -692,7 +654,6 @@ export default function CreateEstimationPage() {
 
       // Use autoTable if available, otherwise fallback to manual table
       if (typeof doc.autoTable === "function") {
-        console.log("Using autoTable for debt details");
         doc.autoTable({
           head: [["Bank/Provider", "Jenis", "Jumlah Utang"]],
           body: debtTableData,
@@ -705,7 +666,6 @@ export default function CreateEstimationPage() {
         });
         yPos = (doc as any).lastAutoTable.finalY + 20;
       } else {
-        console.log("Using manual table creation for debt details");
         yPos = createTableManually(
           ["Bank/Provider", "Jenis", "Jumlah Utang"],
           debtTableData,
@@ -770,7 +730,6 @@ export default function CreateEstimationPage() {
 
           // Use autoTable if available, otherwise fallback to manual table
           if (typeof doc.autoTable === "function") {
-            console.log("Using autoTable for payment terms");
             doc.autoTable({
               head: [["Cicilan", "Tanggal Jatuh Tempo", "Jumlah"]],
               body: termTableData,
@@ -782,7 +741,6 @@ export default function CreateEstimationPage() {
             });
             yPos = (doc as any).lastAutoTable.finalY + 10;
           } else {
-            console.log("Using manual table creation for payment terms");
             yPos = createTableManually(
               ["Cicilan", "Tanggal Jatuh Tempo", "Jumlah"],
               termTableData,

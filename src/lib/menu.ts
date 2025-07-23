@@ -71,16 +71,18 @@ export const data = {
         },
       ],
     },
-    // Temporarily disabled - pages not implemented yet
-    /*
     {
       title: "Clients",
       url: "#",
       icon: PieChartIcon,
       items: [
         {
-          title: "Clients Data",
-          url: "#",
+          title: "Data Entry",
+          url: "/clients/data",
+        },
+        {
+          title: "Clients List",
+          url: "/clients/list",
         },
       ],
     },
@@ -91,19 +93,19 @@ export const data = {
       items: [
         {
           title: "Surat Kuasa Khusus",
-          url: "#",
+          url: "/documents/surat-kuasa-khusus",
         },
         {
           title: "Surat Pernyataan 1",
-          url: "#",
+          url: "/documents/surat-pernyataan-1",
         },
         {
           title: "Surat Pernyataan 2",
-          url: "#",
+          url: "/documents/surat-pernyataan-2",
         },
         {
           title: "Perjanjian Jasa Hukum",
-          url: "#",
+          url: "/documents/surat-perjanjian-jasa-hukum",
         },
       ],
     },
@@ -176,7 +178,6 @@ export const data = {
         },
       ],
     },
-    */
     {
       title: "Rich Editor",
       url: "#",
