@@ -1,3 +1,5 @@
+"use client";
+
 import { AppSidebar } from "@/components/app-sidebar";
 import {
   Breadcrumb,
@@ -14,8 +16,15 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import FirebaseSettingsContent from "@/components/firebase-settings-content";
+import { FormPageSkeleton } from "@/components/ui/page-skeletons";
+import { usePageLoading } from "@/hooks/use-page-loading";
 
 export default function FirebaseSettingsPage() {
+  const isLoading = usePageLoading(800);
+
+  if (isLoading) {
+    return <FormPageSkeleton />;
+  }
   return (
     <SidebarProvider>
       <AppSidebar />

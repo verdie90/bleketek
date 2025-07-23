@@ -1,8 +1,43 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import RichEditor from "@/components/rich-editor";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 
-const initialContent = `
+export default function RichEditorDemo() {
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto py-6 max-w-6xl">
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-8 w-64" />
+            <Skeleton className="h-4 w-96" />
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="border rounded-lg p-4 space-y-2">
+              <Skeleton className="h-8 w-full" />
+              {[...Array(10)].map((_, i) => (
+                <Skeleton key={i} className="h-4 w-full" />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const initialContent = `
 <h1>Selamat Datang di Rich Text Editor</h1>
 <p>Ini adalah contoh <strong>rich text editor</strong> yang mirip dengan <em>CKEditor</em>. Editor ini mendukung berbagai fitur formatting seperti:</p>
 
@@ -75,7 +110,6 @@ helloWorld();</code></pre>
 <p><em>Gunakan toolbar di atas untuk mengedit konten ini!</em></p>
 `;
 
-export default function RichEditorDemo() {
   return (
     <div className="container mx-auto py-8 space-y-8">
       <div>

@@ -4,10 +4,13 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { LoginForm } from "@/components/login-form-new";
 import { useAuth } from "@/hooks/use-auth";
+import { LoginSkeleton } from "@/components/ui/page-skeletons";
+import { usePageLoading } from "@/hooks/use-page-loading";
 
 export default function LoginPage() {
   const router = useRouter();
   const { isAuthenticated, isLoading } = useAuth();
+  const isPageLoading = usePageLoading(800);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -19,15 +22,8 @@ export default function LoginPage() {
     router.push("/dashboard");
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
-          <p className="mt-2 text-sm text-gray-600">Memuat...</p>
-        </div>
-      </div>
-    );
+  if (isLoading || isPageLoading) {
+    return <LoginSkeleton />;
   }
 
   if (isAuthenticated) {

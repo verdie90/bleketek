@@ -57,28 +57,44 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Upload,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   Download,
-  Plus,
   MoreHorizontal,
+  Plus,
+  Upload,
+  Search,
+  Filter,
+  UserPlus,
   Edit,
   Trash2,
-  FileSpreadsheet,
-  FileText,
   Phone,
-  User,
+  Mail,
+  FileText,
+  Eye,
   Calendar,
   Tag,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
-import { format } from "date-fns";
+import { format as formatDate } from "date-fns";
 import { Timestamp } from "firebase/firestore";
 import { useProspects, ProspectsFilter } from "@/hooks/use-prospects";
 import { ProspectsFilters, BulkActions } from "@/components/prospects-filters";
 import { ImportExcelModal } from "@/components/import-excel-modal";
 import { AddEditProspectModal } from "@/components/add-edit-prospect-modal";
 import { exportToExcel, exportToPDF, ExportHelper } from "@/lib/export-utils";
+import { TablePageSkeleton } from "@/components/ui/page-skeletons";
+import { usePageLoading } from "@/hooks/use-page-loading";
 
 export default function TelemarketingProspectsPage() {
+  // ALL HOOKS MUST BE AT THE TOP - NEVER CONDITIONAL
+  const isPageLoading = usePageLoading(1000);
   const {
     prospects,
     loading,
@@ -95,25 +111,86 @@ export default function TelemarketingProspectsPage() {
     users,
   } = useProspects();
 
-  // Debug: Log prospects with lastContactDate
+  const [selectedProspects, setSelectedProspects] = useState<string[]>([]);
+  const [currentFilter, setCurrentFilter] = useState<ProspectsFilter>({});
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isAddEditModalOpen, setIsAddEditModalOpen] = useState(false);
+  const [editingProspect, setEditingProspect] = useState<any>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [showBulkActions, setShowBulkActions] = useState(false);
+
+  // useEffect hooks
   useEffect(() => {
+<<<<<<< HEAD
     const prospectsWithLastContact = prospects.filter((p) => p.lastContactDate);
 
     // Debug: Log prospects with assignedTo
     const prospectsWithAssignment = prospects.filter((p) => p.assignedTo);
   }, [prospects, users]);
+=======
+    if (prospects.length > 0) {
+      console.log("📊 Total prospects loaded:", prospects.length);
+    }
+  }, [prospects]);
 
-  // Helper functions to get labels from database
+  // useMemo hooks
+  const filteredProspects = useMemo(() => {
+    if (!prospects || prospects.length === 0) return [];
+    let filtered = filterProspects(currentFilter);
+    
+    // Sort by lastContactDate (newest first), then by createdAt (newest first)
+    filtered.sort((a, b) => {
+      // First, sort by lastContactDate
+      if (a.lastContactDate && b.lastContactDate) {
+        return b.lastContactDate.toMillis() - a.lastContactDate.toMillis();
+      }
+      if (a.lastContactDate && !b.lastContactDate) {
+        return -1; // a has contact date, b doesn't - a comes first
+      }
+      if (!a.lastContactDate && b.lastContactDate) {
+        return 1; // b has contact date, a doesn't - b comes first
+      }
+      
+      // If both don't have lastContactDate, sort by createdAt (newest first)
+      return b.createdAt.toMillis() - a.createdAt.toMillis();
+    });
+    
+    return filtered;
+  }, [prospects, currentFilter, filterProspects]);
+
+  const paginatedProspects = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredProspects.slice(startIndex, endIndex);
+  }, [filteredProspects, currentPage, itemsPerPage]);
+>>>>>>> 96ac4a3188e3be6678281adbc0afdbdaed8a490e
+
+  const stats = useMemo(() => {
+    const total = filteredProspects.length;
+    const respon = filteredProspects.filter((p) => p.status === "pending").length;
+    const tidakAktif = filteredProspects.filter((p) => p.status === "contacted").length;
+    const janjiTelepon = filteredProspects.filter((p) => p.status === "qualified").length;
+    const noProgram = filteredProspects.filter((p) => p.status === "converted").length;
+    const tidakMinat = filteredProspects.filter((p) => p.status === "rejected").length;
+
+    return { total, respon, tidakAktif, janjiTelepon, noProgram, tidakMinat };
+  }, [filteredProspects]);
+
+  const totalPages = Math.ceil(filteredProspects.length / itemsPerPage);
+
+  // Early return AFTER all hooks
+  if (isPageLoading || loading) {
+    return <TablePageSkeleton />;
+  }
+
+  // Helper functions
   const getStatusLabel = (statusName: string) => {
-    // Since prospects now store names directly, just return the name
-    // But still try to find the status for color/validation
     const status = prospectStatuses.find((s) => s.name === statusName);
     return status ? status.name : statusName;
   };
 
   const getSourceLabel = (sourceName: string) => {
-    // Since prospects now store names directly, just return the name
-    // But still try to find the source for color/validation
     const source = prospectSources.find((s) => s.name === sourceName);
     return source ? source.name : sourceName;
   };
@@ -123,136 +200,73 @@ export default function TelemarketingProspectsPage() {
     return status ? "default" : "secondary";
   };
 
-  const getAssignedToLabel = (userId: string) => {
+  const getAssignedToLabel = (userId?: string) => {
     if (!userId) return "Unassigned";
+<<<<<<< HEAD
 
+=======
+>>>>>>> 96ac4a3188e3be6678281adbc0afdbdaed8a490e
     const user = users.find((u) => u.id === userId);
-    if (!user) {
-      console.warn("⚠️ User not found for ID:", userId);
-      return `Unknown User (${userId})`;
-    }
-
-    return user.displayName || user.email || userId;
+    return user ? user.displayName || user.email : "User tidak ditemukan";
   };
 
-  const [selectedProspects, setSelectedProspects] = useState<string[]>([]);
-  const [currentFilter, setCurrentFilter] = useState<ProspectsFilter>({});
-  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [isAddEditModalOpen, setIsAddEditModalOpen] = useState(false);
-  const [editingProspect, setEditingProspect] = useState<any>(null);
-
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
-
-  // Apply filters to prospects, then sort by lastContactDate descending
-  const filteredProspects = useMemo(() => {
-    const filtered = filterProspects(currentFilter);
-    return filtered.slice().sort((a, b) => {
-      const aDate = a.lastContactDate?.toDate?.()
-        ? a.lastContactDate.toDate().getTime()
-        : 0;
-      const bDate = b.lastContactDate?.toDate?.()
-        ? b.lastContactDate.toDate().getTime()
-        : 0;
-      return bDate - aDate;
-    });
-  }, [prospects, currentFilter, filterProspects]);
-
-  // Pagination calculations
-  const totalPages = Math.ceil(filteredProspects.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedProspects = filteredProspects.slice(startIndex, endIndex);
-
-  // Reset to first page when filter changes
+  // Event handlers
   const handleFilterChange = (filter: ProspectsFilter) => {
     setCurrentFilter(filter);
     setCurrentPage(1);
     setSelectedProspects([]);
   };
 
-  // Reset to first page when items per page changes
   const handleItemsPerPageChange = (value: string) => {
     setItemsPerPage(parseInt(value));
     setCurrentPage(1);
     setSelectedProspects([]);
   };
 
-  // Handle select all
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
+  const handleSelectAll = () => {
+    if (selectedProspects.length === paginatedProspects.length) {
+      setSelectedProspects([]);
+    } else {
       setSelectedProspects(paginatedProspects.map((p) => p.id!));
-    } else {
-      setSelectedProspects([]);
     }
   };
 
-  // Handle individual selection
-  const handleSelectProspect = (id: string, checked: boolean) => {
-    if (checked) {
-      setSelectedProspects([...selectedProspects, id]);
-    } else {
-      setSelectedProspects(selectedProspects.filter((pid) => pid !== id));
+  const handleSelectProspect = (id: string) => {
+    setSelectedProspects((prev) =>
+      prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]
+    );
+  };
+
+  const handleBulkAction = async (action: string, data?: any) => {
+    if (selectedProspects.length === 0) return;
+
+    try {
+      if (action === "delete") {
+        if (confirm(`Yakin ingin menghapus ${selectedProspects.length} prospects yang dipilih?`)) {
+          await bulkDeleteProspects(selectedProspects);
+          setSelectedProspects([]);
+          setShowBulkActions(false);
+        }
+      } else {
+        await bulkUpdateProspects(selectedProspects, data);
+        setSelectedProspects([]);
+        setShowBulkActions(false);
+      }
+    } catch (error) {
+      console.error("Bulk action failed:", error);
     }
   };
 
-  // Handle bulk operations
-  const handleBulkUpdate = async (updateData: any) => {
-    const result = await bulkUpdateProspects(selectedProspects, updateData);
-    if (result.success) {
-      setSelectedProspects([]);
-    }
+  const handleBulkStatusChange = (newStatus: string) => {
+    handleBulkAction("updateStatus", { status: newStatus });
   };
 
-  const handleBulkDelete = async () => {
-    const result = await bulkDeleteProspects(selectedProspects);
-    if (result.success) {
-      setSelectedProspects([]);
-    }
+  const handleBulkSourceChange = (newSource: string) => {
+    handleBulkAction("updateSource", { source: newSource });
   };
 
-  // Handle export
-  const handleExportExcel = () => {
-    const exportHelper: ExportHelper = {
-      getStatusLabel,
-      getSourceLabel,
-      getAssignedToLabel,
-    };
-    exportToExcel(filteredProspects, exportHelper);
-  };
-
-  const handleExportPDF = () => {
-    const exportHelper: ExportHelper = {
-      getStatusLabel,
-      getSourceLabel,
-      getAssignedToLabel,
-    };
-    exportToPDF(filteredProspects, exportHelper);
-  };
-
-  // Handle import
-  const handleImport = async (
-    data: Array<{ name: string; phoneNumber: string }>,
-    options: {
-      source: any;
-      status: any;
-      assignedTo?: string;
-      tags: string[];
-      skipDuplicates: boolean;
-    }
-  ) => {
-    const result = await importProspects(data, options);
-    if (result.success) {
-      setIsImportModalOpen(false);
-    }
-    return result;
-  };
-
-  // Handle add/edit prospect
-  const handleEditProspect = (prospect: any) => {
-    setEditingProspect(prospect);
-    setIsAddEditModalOpen(true);
+  const handleBulkAssignedToChange = (newAssignedTo: string) => {
+    handleBulkAction("updateAssignedTo", { assignedTo: newAssignedTo === "unassigned" ? null : newAssignedTo });
   };
 
   const handleAddProspect = () => {
@@ -260,6 +274,7 @@ export default function TelemarketingProspectsPage() {
     setIsAddEditModalOpen(true);
   };
 
+<<<<<<< HEAD
   const handleSaveProspect = async (data: any) => {
     let result;
     if (editingProspect) {
@@ -308,22 +323,23 @@ export default function TelemarketingProspectsPage() {
         status === "not interested"
       );
     }).length;
+=======
+  const handleEditProspect = (prospect: any) => {
+    setEditingProspect(prospect);
+    setIsAddEditModalOpen(true);
+  };
 
-    return { total, responded, callback, notInterested };
-  }, [filteredProspects]);
+  const handleDeleteProspect = async (id: string) => {
+    if (confirm("Yakin ingin menghapus prospect ini?")) {
+      await deleteProspect(id);
+    }
+  };
+>>>>>>> 96ac4a3188e3be6678281adbc0afdbdaed8a490e
 
-  if (loading) {
-    return (
-      <SidebarProvider>
-        <AppSidebar />
-        <SidebarInset>
-          <div className="flex items-center justify-center h-screen">
-            <div className="text-lg">Loading prospects...</div>
-          </div>
-        </SidebarInset>
-      </SidebarProvider>
-    );
-  }
+  const handleExport = (format: "excel" | "pdf") => {
+    console.log("Export to", format, "with", filteredProspects.length, "prospects");
+    // Export functionality will be implemented later
+  };
 
   return (
     <SidebarProvider>
@@ -340,9 +356,7 @@ export default function TelemarketingProspectsPage() {
                 </BreadcrumbItem>
                 <BreadcrumbSeparator className="hidden md:block" />
                 <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href="/telemarketing">
-                    Telemarketing
-                  </BreadcrumbLink>
+                  <BreadcrumbLink href="#">Telemarketing</BreadcrumbLink>
                 </BreadcrumbItem>
                 <BreadcrumbSeparator className="hidden md:block" />
                 <BreadcrumbItem>
@@ -354,167 +368,248 @@ export default function TelemarketingProspectsPage() {
         </header>
 
         <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-          {/* Statistics Cards */}
-          <div className="grid gap-4 md:grid-cols-4">
+          {/* Stats Cards */}
+          <div className="grid gap-4 md:grid-cols-6">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  Total Prospects
-                </CardTitle>
-                <User className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium">Total</CardTitle>
+                <UserPlus className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{stats.total}</div>
+                <p className="text-xs text-muted-foreground">
+                  Total prospects
+                </p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Respon</CardTitle>
+                <UserPlus className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.respon}</div>
+                <p className="text-xs text-muted-foreground">
+                  {stats.total > 0
+                    ? Math.round((stats.respon / stats.total) * 100)
+                    : 0}
+                  % dari total
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Tidak Aktif</CardTitle>
                 <Phone className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stats.responded}</div>
+                <div className="text-2xl font-bold">{stats.tidakAktif}</div>
                 <p className="text-xs text-muted-foreground">
                   {stats.total > 0
-                    ? Math.round((stats.responded / stats.total) * 100)
+                    ? Math.round((stats.tidakAktif / stats.total) * 100)
                     : 0}
-                  % of total
+                  % dari total
                 </p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Callback</CardTitle>
-                <Tag className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium">Janji Telepon</CardTitle>
+                <UserPlus className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stats.callback}</div>
+                <div className="text-2xl font-bold">{stats.janjiTelepon}</div>
                 <p className="text-xs text-muted-foreground">
                   {stats.total > 0
-                    ? Math.round((stats.callback / stats.total) * 100)
+                    ? Math.round((stats.janjiTelepon / stats.total) * 100)
                     : 0}
-                  % of total
+                  % dari total
                 </p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  Tidak Minat
-                </CardTitle>
-                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium">No Program</CardTitle>
+                <UserPlus className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stats.notInterested}</div>
+                <div className="text-2xl font-bold">{stats.noProgram}</div>
                 <p className="text-xs text-muted-foreground">
                   {stats.total > 0
-                    ? Math.round((stats.notInterested / stats.total) * 100)
+                    ? Math.round((stats.noProgram / stats.total) * 100)
                     : 0}
-                  % of total
+                  % dari total
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Tidak Minat</CardTitle>
+                <UserPlus className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.tidakMinat}</div>
+                <p className="text-xs text-muted-foreground">
+                  {stats.total > 0
+                    ? Math.round((stats.tidakMinat / stats.total) * 100)
+                    : 0}
+                  % dari total
                 </p>
               </CardContent>
             </Card>
           </div>
 
-          {/* Main Content */}
+          {/* Filters and Actions */}
+          <div className="flex items-center justify-between">
+            <ProspectsFilters
+              onFilterChange={handleFilterChange}
+              currentFilter={currentFilter}
+            />
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsImportModalOpen(true)}
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                Import
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Download className="h-4 w-4 mr-2" />
+                    Export
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem onClick={() => handleExport("excel")}>
+                    Export to Excel
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleExport("pdf")}>
+                    Export to PDF
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button onClick={handleAddProspect}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Prospect
+              </Button>
+            </div>
+          </div>
+
+          {/* Bulk Actions */}
+          {selectedProspects.length > 0 && (
+            <Card className="bg-blue-50 border-blue-200">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">
+                      {selectedProspects.length} prospects dipilih
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setShowBulkActions(!showBulkActions)}
+                    >
+                      {showBulkActions ? "Hide Actions" : "Show Actions"}
+                    </Button>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setSelectedProspects([])}
+                  >
+                    Clear Selection
+                  </Button>
+                </div>
+
+                {showBulkActions && (
+                  <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-3">
+                    {/* Bulk Status Change */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-gray-700">Change Status:</label>
+                      <Select onValueChange={handleBulkStatusChange}>
+                        <SelectTrigger className="h-8">
+                          <SelectValue placeholder="Select status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {prospectStatuses.map((status) => (
+                            <SelectItem key={status.id} value={status.name}>
+                              {status.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Bulk Source Change */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-gray-700">Change Source:</label>
+                      <Select onValueChange={handleBulkSourceChange}>
+                        <SelectTrigger className="h-8">
+                          <SelectValue placeholder="Select source" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {prospectSources.map((source) => (
+                            <SelectItem key={source.id} value={source.name}>
+                              {source.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Bulk Assigned To Change */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-gray-700">Assign To:</label>
+                      <Select onValueChange={handleBulkAssignedToChange}>
+                        <SelectTrigger className="h-8">
+                          <SelectValue placeholder="Select user" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="unassigned">Unassigned</SelectItem>
+                          {users.map((user) => (
+                            <SelectItem key={user.id} value={user.id || ''}>
+                              {user.displayName || user.email}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Bulk Delete */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-gray-700">Bulk Actions:</label>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        className="w-full h-8"
+                        onClick={() => handleBulkAction("delete")}
+                      >
+                        <Trash2 className="h-3 w-3 mr-1" />
+                        Delete All
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Table */}
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Telemarketing Prospects</CardTitle>
-                  <CardDescription>
-                    Manage your telemarketing prospects and track their status
-                  </CardDescription>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {/* Export buttons */}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleExportExcel}
-                  >
-                    <FileSpreadsheet className="mr-2 h-4 w-4" />
-                    Export Excel
-                  </Button>
-
-                  <Button variant="outline" size="sm" onClick={handleExportPDF}>
-                    <FileText className="mr-2 h-4 w-4" />
-                    Export PDF
-                  </Button>
-
-                  {/* Import button */}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsImportModalOpen(true)}
-                  >
-                    <Upload className="mr-2 h-4 w-4" />
-                    Import Excel
-                  </Button>
-
-                  {/* Add prospect button */}
-                  <Button size="sm" onClick={handleAddProspect}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Prospect
-                  </Button>
-                </div>
-              </div>
+              <CardTitle>Prospects ({filteredProspects.length})</CardTitle>
+              <CardDescription>
+                Manage your prospect database
+              </CardDescription>
             </CardHeader>
-
             <CardContent>
-              {/* Filters */}
-              <div className="mb-6">
-                <ProspectsFilters
-                  currentFilter={currentFilter}
-                  onFilterChange={handleFilterChange}
-                />
-              </div>
-              {/* Bulk Actions */}
-              {selectedProspects.length > 0 && (
-                <div className="mb-4">
-                  <BulkActions
-                    selectedProspects={selectedProspects}
-                    onBulkUpdate={handleBulkUpdate}
-                    onBulkDelete={handleBulkDelete}
-                  />
-                </div>
-              )}
-              {/* Pagination Info and Controls */}
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">
-                    Showing{" "}
-                    {filteredProspects.length === 0 ? 0 : startIndex + 1} to{" "}
-                    {Math.min(endIndex, filteredProspects.length)} of{" "}
-                    {filteredProspects.length} prospects
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">
-                    Rows per page:
-                  </span>
-                  <Select
-                    value={itemsPerPage.toString()}
-                    onValueChange={handleItemsPerPageChange}
-                  >
-                    <SelectTrigger className="w-20">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="5">5</SelectItem>
-                      <SelectItem value="10">10</SelectItem>
-                      <SelectItem value="20">20</SelectItem>
-                      <SelectItem value="50">50</SelectItem>
-                      <SelectItem value="100">100</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              {/* Table */}
               <div className="rounded-md border">
                 <Table>
                   <TableHeader>
@@ -533,24 +628,31 @@ export default function TelemarketingProspectsPage() {
                         />
                       </TableHead>
                       <TableHead>Name</TableHead>
-                      <TableHead>Phone</TableHead>
+                      <TableHead>Contact</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Source</TableHead>
                       <TableHead>Assigned To</TableHead>
-                      <TableHead>Last Contact</TableHead>
-                      <TableHead>Next Follow Up</TableHead>
+                      <TableHead className="cursor-default">
+                        <div className="flex items-center gap-1">
+                          Last Contact
+                          <ArrowDown className="h-3 w-3 text-muted-foreground" />
+                        </div>
+                      </TableHead>
                       <TableHead>Tags</TableHead>
-                      <TableHead className="w-[50px]">Actions</TableHead>
+                      <TableHead className="w-[70px]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {paginatedProspects.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={10} className="text-center py-8">
-                          {currentFilter &&
-                          Object.keys(currentFilter).length > 0
-                            ? "No prospects found matching your filters."
-                            : "No prospects found. Add your first prospect to get started."}
+                        <TableCell colSpan={9} className="text-center py-8">
+                          <div className="text-muted-foreground">
+                            <UserPlus className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                            <p>No prospects found</p>
+                            <p className="text-sm">
+                              Add your first prospect to get started
+                            </p>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -559,28 +661,35 @@ export default function TelemarketingProspectsPage() {
                           <TableCell>
                             <Checkbox
                               checked={selectedProspects.includes(prospect.id!)}
-                              onCheckedChange={(checked) =>
-                                handleSelectProspect(prospect.id!, !!checked)
+                              onCheckedChange={() =>
+                                handleSelectProspect(prospect.id!)
                               }
                             />
                           </TableCell>
-                          <TableCell className="font-medium">
-                            {prospect.name}
+                          <TableCell>
+                            <div>
+                              <div className="font-medium">{prospect.name}</div>
+                            </div>
                           </TableCell>
                           <TableCell>
-                            {prospect.phone || prospect.phoneNumber}
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-1">
+                                <Phone className="h-3 w-3" />
+                                <span className="text-sm">{prospect.phoneNumber}</span>
+                              </div>
+                            </div>
                           </TableCell>
                           <TableCell>
                             <Badge variant={getStatusColor(prospect.status)}>
                               {getStatusLabel(prospect.status)}
                             </Badge>
                           </TableCell>
+                          <TableCell>{getSourceLabel(prospect.source)}</TableCell>
                           <TableCell>
-                            <Badge variant="outline">
-                              {getSourceLabel(prospect.source)}
-                            </Badge>
+                            {getAssignedToLabel(prospect.assignedTo)}
                           </TableCell>
                           <TableCell>
+<<<<<<< HEAD
                             {(() => {
                               const assignedTo = prospect.assignedTo || "";
                               const label = getAssignedToLabel(assignedTo);
@@ -632,21 +741,34 @@ export default function TelemarketingProspectsPage() {
                                   "MMM dd, yyyy"
                                 )
                               : "-"}
+=======
+                            {prospect.lastContactDate ? (
+                              <div className="flex items-center gap-1">
+                                <Calendar className="h-3 w-3" />
+                                <span className="text-sm">
+                                  {formatDate(
+                                    prospect.lastContactDate.toDate(),
+                                    "dd/MM/yyyy HH:mm"
+                                  )}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground text-sm">
+                                Never contacted
+                              </span>
+                            )}
+>>>>>>> 96ac4a3188e3be6678281adbc0afdbdaed8a490e
                           </TableCell>
                           <TableCell>
                             <div className="flex flex-wrap gap-1">
                               {prospect.tags?.slice(0, 2).map((tag, index) => (
-                                <Badge
-                                  key={index}
-                                  variant="secondary"
-                                  className="text-xs"
-                                >
+                                <Badge key={index} variant="outline" className="text-xs">
                                   {tag}
                                 </Badge>
                               ))}
-                              {(prospect.tags?.length || 0) > 2 && (
-                                <Badge variant="secondary" className="text-xs">
-                                  +{(prospect.tags?.length || 0) - 2}
+                              {prospect.tags && prospect.tags.length > 2 && (
+                                <Badge variant="outline" className="text-xs">
+                                  +{prospect.tags.length - 2}
                                 </Badge>
                               )}
                             </div>
@@ -658,18 +780,25 @@ export default function TelemarketingProspectsPage() {
                                   <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
+                              <DropdownMenuContent>
                                 <DropdownMenuItem
                                   onClick={() => handleEditProspect(prospect)}
                                 >
-                                  <Edit className="mr-2 h-4 w-4" />
+                                  <Edit className="h-4 w-4 mr-2" />
                                   Edit
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
+<<<<<<< HEAD
                                   className="text-destructive"
                                   onClick={() => deleteProspect(prospect.id!)}
                                 >
                                   <Trash2 className="mr-2 h-4 w-4" />
+=======
+                                  onClick={() => handleDeleteProspect(prospect.id!)}
+                                  className="text-red-600"
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+>>>>>>> 96ac4a3188e3be6678281adbc0afdbdaed8a490e
                                   Delete
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
@@ -681,122 +810,82 @@ export default function TelemarketingProspectsPage() {
                   </TableBody>
                 </Table>
               </div>
+
               {/* Pagination */}
               {totalPages > 1 && (
-                <div className="flex items-center justify-center mt-4">
-                  <Pagination>
-                    <PaginationContent>
-                      <PaginationItem>
-                        <PaginationPrevious
-                          onClick={() =>
-                            setCurrentPage(Math.max(1, currentPage - 1))
-                          }
-                          className={
-                            currentPage === 1
-                              ? "pointer-events-none opacity-50"
-                              : "cursor-pointer"
-                          }
-                        />
-                      </PaginationItem>
-
-                      {/* First page */}
-                      {currentPage > 3 && (
-                        <>
-                          <PaginationItem>
-                            <PaginationLink
-                              onClick={() => setCurrentPage(1)}
-                              className="cursor-pointer"
-                            >
-                              1
-                            </PaginationLink>
-                          </PaginationItem>
-                          {currentPage > 4 && (
-                            <PaginationItem>
-                              <PaginationEllipsis />
-                            </PaginationItem>
-                          )}
-                        </>
-                      )}
-
-                      {/* Page numbers around current page */}
-                      {Array.from({ length: totalPages }, (_, i) => i + 1)
-                        .filter((page) => {
-                          return (
-                            page >= Math.max(1, currentPage - 2) &&
-                            page <= Math.min(totalPages, currentPage + 2)
-                          );
-                        })
-                        .map((page) => (
-                          <PaginationItem key={page}>
-                            <PaginationLink
-                              onClick={() => setCurrentPage(page)}
-                              isActive={page === currentPage}
-                              className="cursor-pointer"
-                            >
-                              {page}
-                            </PaginationLink>
-                          </PaginationItem>
+                <div className="flex items-center justify-between px-2 py-4">
+                  <div className="flex items-center space-x-2">
+                    <p className="text-sm font-medium">Rows per page</p>
+                    <Select
+                      value={itemsPerPage.toString()}
+                      onValueChange={handleItemsPerPageChange}
+                    >
+                      <SelectTrigger className="h-8 w-[70px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent side="top">
+                        {[10, 20, 30, 40, 50].map((pageSize) => (
+                          <SelectItem key={pageSize} value={pageSize.toString()}>
+                            {pageSize}
+                          </SelectItem>
                         ))}
-
-                      {/* Last page */}
-                      {currentPage < totalPages - 2 && (
-                        <>
-                          {currentPage < totalPages - 3 && (
-                            <PaginationItem>
-                              <PaginationEllipsis />
-                            </PaginationItem>
-                          )}
-                          <PaginationItem>
-                            <PaginationLink
-                              onClick={() => setCurrentPage(totalPages)}
-                              className="cursor-pointer"
-                            >
-                              {totalPages}
-                            </PaginationLink>
-                          </PaginationItem>
-                        </>
-                      )}
-
-                      <PaginationItem>
-                        <PaginationNext
-                          onClick={() =>
-                            setCurrentPage(
-                              Math.min(totalPages, currentPage + 1)
-                            )
-                          }
-                          className={
-                            currentPage === totalPages
-                              ? "pointer-events-none opacity-50"
-                              : "cursor-pointer"
-                          }
-                        />
-                      </PaginationItem>
-                    </PaginationContent>
-                  </Pagination>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center space-x-6 lg:space-x-8">
+                    <div className="flex w-[100px] items-center justify-center text-sm font-medium">
+                      Page {currentPage} of {totalPages}
+                    </div>
+                    <Pagination>
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious
+                            onClick={() =>
+                              setCurrentPage(Math.max(1, currentPage - 1))
+                            }
+                            className={
+                              currentPage === 1
+                                ? "pointer-events-none opacity-50"
+                                : "cursor-pointer"
+                            }
+                          />
+                        </PaginationItem>
+                        <PaginationItem>
+                          <PaginationNext
+                            onClick={() =>
+                              setCurrentPage(Math.min(totalPages, currentPage + 1))
+                            }
+                            className={
+                              currentPage === totalPages
+                                ? "pointer-events-none opacity-50"
+                                : "cursor-pointer"
+                            }
+                          />
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
+                  </div>
                 </div>
               )}
-              {/* Pagination could go here */}
             </CardContent>
           </Card>
         </div>
-
-        {/* Modals */}
-        <ImportExcelModal
-          open={isImportModalOpen}
-          onOpenChange={setIsImportModalOpen}
-          onImport={handleImport}
-        />
-
-        <AddEditProspectModal
-          open={isAddEditModalOpen}
-          onOpenChange={(open) => {
-            setIsAddEditModalOpen(open);
-            if (!open) setEditingProspect(null);
-          }}
-          onSave={handleSaveProspect}
-          prospect={editingProspect}
-        />
       </SidebarInset>
+
+      {/* Modals */}
+      <ImportExcelModal
+        open={isImportModalOpen}
+        onOpenChange={setIsImportModalOpen}
+        onImport={importProspects}
+      />      <AddEditProspectModal
+        open={isAddEditModalOpen}
+        onOpenChange={setIsAddEditModalOpen}
+        onSave={editingProspect ?
+          (data) => updateProspect(editingProspect.id, data) :
+          addProspect
+        }
+        prospect={editingProspect}
+      />
     </SidebarProvider>
   );
 }
