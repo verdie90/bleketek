@@ -103,6 +103,7 @@ interface DebtEntry {
   jenisHutang: string;
   bankProvider: string;
   nomorKartuKontrak: string;
+  sisaHutang: string;
 }
 
 interface DebtData {
@@ -157,6 +158,7 @@ const INITIAL_FORM_DATA: ClientFormData = {
         jenisHutang: "",
         bankProvider: "",
         nomorKartuKontrak: "",
+        sisaHutang: "",
       },
     ],
   },
@@ -338,18 +340,29 @@ export default function ClientDataPage() {
   const validateStep = (step: number): boolean => {
     switch (step) {
       case 1:
-        return !!(
+        const personalValid = !!(
           formData.personalData.namaLengkap &&
           formData.personalData.nik &&
+          formData.personalData.nik.length === 16 &&
           formData.personalData.tempatLahir &&
           formData.personalData.tanggalLahir &&
           formData.personalData.jenisKelamin &&
           formData.personalData.statusPerkawinan &&
           formData.personalData.namaIbuKandung
         );
+        if (!personalValid && step === currentStep) {
+          if (
+            formData.personalData.nik &&
+            formData.personalData.nik.length !== 16
+          ) {
+            toast.error("NIK harus 16 digit");
+          }
+        }
+        return personalValid;
       case 2:
-        return !!(
+        const contactValid = !!(
           formData.contactData.noTelepon &&
+          formData.contactData.noTelepon.length >= 10 &&
           formData.contactData.provinsi &&
           formData.contactData.kotaKabupaten &&
           formData.contactData.kecamatan &&
@@ -357,6 +370,15 @@ export default function ClientDataPage() {
           formData.contactData.rtRw &&
           formData.contactData.alamat
         );
+        if (!contactValid && step === currentStep) {
+          if (
+            formData.contactData.noTelepon &&
+            formData.contactData.noTelepon.length < 10
+          ) {
+            toast.error("Nomor telepon minimal 10 digit");
+          }
+        }
+        return contactValid;
       case 3:
         return !!(
           formData.billingData.terimaBillingTagihan &&
@@ -369,7 +391,10 @@ export default function ClientDataPage() {
       case 5:
         return formData.debtData.debts.every(
           (debt) =>
-            debt.jenisHutang && debt.bankProvider && debt.nomorKartuKontrak
+            debt.jenisHutang &&
+            debt.bankProvider &&
+            debt.nomorKartuKontrak &&
+            debt.sisaHutang
         );
       default:
         return true;
@@ -399,129 +424,145 @@ export default function ClientDataPage() {
     }
   };
 
-  const generatePDF = () => {
-    const doc = new jsPDF();
-
-    // Header
-    doc.setFontSize(20);
-    doc.text("Data Klien", 20, 20);
-    doc.setFontSize(12);
-
-    let yPosition = 40;
-
-    // Personal Data Section
-    doc.setFontSize(14);
-    doc.text("Data Pribadi", 20, yPosition);
-    yPosition += 10;
-
-    doc.setFontSize(10);
-    doc.text(
-      `Nama Lengkap: ${formData.personalData.namaLengkap}`,
-      20,
-      yPosition
-    );
-    yPosition += 7;
-    doc.text(`NIK: ${formData.personalData.nik}`, 20, yPosition);
-    yPosition += 7;
-    doc.text(
-      `Tempat Lahir: ${formData.personalData.tempatLahir}`,
-      20,
-      yPosition
-    );
-    yPosition += 7;
-    doc.text(
-      `Tanggal Lahir: ${formData.personalData.tanggalLahir}`,
-      20,
-      yPosition
-    );
-    yPosition += 7;
-    doc.text(
-      `Jenis Kelamin: ${formData.personalData.jenisKelamin}`,
-      20,
-      yPosition
-    );
-    yPosition += 7;
-    doc.text(
-      `Status Perkawinan: ${formData.personalData.statusPerkawinan}`,
-      20,
-      yPosition
-    );
-    yPosition += 7;
-    doc.text(
-      `Nama Ibu Kandung: ${formData.personalData.namaIbuKandung}`,
-      20,
-      yPosition
-    );
-    yPosition += 15;
-
-    // Contact Data Section
-    doc.setFontSize(14);
-    doc.text("Kontak & Alamat", 20, yPosition);
-    yPosition += 10;
-
-    doc.setFontSize(10);
-    doc.text(`No. Telepon: ${formData.contactData.noTelepon}`, 20, yPosition);
-    yPosition += 7;
-    doc.text(`Email: ${formData.contactData.email}`, 20, yPosition);
-    yPosition += 7;
-    doc.text(`Alamat: ${formData.contactData.alamat}`, 20, yPosition);
-    yPosition += 7;
-    doc.text(
-      `${formData.contactData.kelurahanDesa}, ${formData.contactData.kecamatan}`,
-      20,
-      yPosition
-    );
-    yPosition += 7;
-    doc.text(
-      `${formData.contactData.kotaKabupaten}, ${formData.contactData.provinsi}`,
-      20,
-      yPosition
-    );
-    yPosition += 15;
-
-    // Job Data Section
-    doc.setFontSize(14);
-    doc.text("Pekerjaan", 20, yPosition);
-    yPosition += 10;
-
-    doc.setFontSize(10);
-    doc.text(`Perusahaan: ${formData.jobData.namaPerusahaan}`, 20, yPosition);
-    yPosition += 7;
-    if (formData.jobData.jabatan) {
-      doc.text(`Jabatan: ${formData.jobData.jabatan}`, 20, yPosition);
-      yPosition += 7;
+  const generatePDF = async () => {
+    if (!formData.personalData.namaLengkap) {
+      toast.error("Nama lengkap harus diisi untuk generate PDF");
+      return;
     }
-    doc.text(`Alamat Kantor: ${formData.jobData.alamatKantor}`, 20, yPosition);
-    yPosition += 15;
 
-    // Debt Data Section
-    doc.setFontSize(14);
-    doc.text("Rincian Hutang", 20, yPosition);
-    yPosition += 10;
+    try {
+      const doc = new jsPDF();
 
-    doc.setFontSize(10);
-    formData.debtData.debts.forEach((debt, index) => {
-      if (debt.jenisHutang) {
-        doc.text(
-          `${index + 1}. Jenis Hutang: ${debt.jenisHutang}`,
-          20,
-          yPosition
-        );
+      // Header
+      doc.setFontSize(20);
+      doc.text("Data Klien", 20, 20);
+      doc.setFontSize(12);
+
+      let yPosition = 40;
+
+      // Personal Data Section
+      doc.setFontSize(14);
+      doc.text("Data Pribadi", 20, yPosition);
+      yPosition += 10;
+
+      doc.setFontSize(10);
+      doc.text(
+        `Nama Lengkap: ${formData.personalData.namaLengkap}`,
+        20,
+        yPosition
+      );
+      yPosition += 7;
+      doc.text(`NIK: ${formData.personalData.nik}`, 20, yPosition);
+      yPosition += 7;
+      doc.text(
+        `Tempat Lahir: ${formData.personalData.tempatLahir}`,
+        20,
+        yPosition
+      );
+      yPosition += 7;
+      doc.text(
+        `Tanggal Lahir: ${formData.personalData.tanggalLahir}`,
+        20,
+        yPosition
+      );
+      yPosition += 7;
+      doc.text(
+        `Jenis Kelamin: ${formData.personalData.jenisKelamin}`,
+        20,
+        yPosition
+      );
+      yPosition += 7;
+      doc.text(
+        `Status Perkawinan: ${formData.personalData.statusPerkawinan}`,
+        20,
+        yPosition
+      );
+      yPosition += 7;
+      doc.text(
+        `Nama Ibu Kandung: ${formData.personalData.namaIbuKandung}`,
+        20,
+        yPosition
+      );
+      yPosition += 15;
+
+      // Contact Data Section
+      doc.setFontSize(14);
+      doc.text("Kontak & Alamat", 20, yPosition);
+      yPosition += 10;
+
+      doc.setFontSize(10);
+      doc.text(`No. Telepon: ${formData.contactData.noTelepon}`, 20, yPosition);
+      yPosition += 7;
+      doc.text(`Email: ${formData.contactData.email}`, 20, yPosition);
+      yPosition += 7;
+      doc.text(`Alamat: ${formData.contactData.alamat}`, 20, yPosition);
+      yPosition += 7;
+      doc.text(
+        `${formData.contactData.kelurahanDesa}, ${formData.contactData.kecamatan}`,
+        20,
+        yPosition
+      );
+      yPosition += 7;
+      doc.text(
+        `${formData.contactData.kotaKabupaten}, ${formData.contactData.provinsi}`,
+        20,
+        yPosition
+      );
+      yPosition += 15;
+
+      // Job Data Section
+      doc.setFontSize(14);
+      doc.text("Pekerjaan", 20, yPosition);
+      yPosition += 10;
+
+      doc.setFontSize(10);
+      doc.text(`Perusahaan: ${formData.jobData.namaPerusahaan}`, 20, yPosition);
+      yPosition += 7;
+      if (formData.jobData.jabatan) {
+        doc.text(`Jabatan: ${formData.jobData.jabatan}`, 20, yPosition);
         yPosition += 7;
-        doc.text(`   Bank/Provider: ${debt.bankProvider}`, 20, yPosition);
-        yPosition += 7;
-        doc.text(
-          `   Nomor Kartu/Kontrak: ${debt.nomorKartuKontrak}`,
-          20,
-          yPosition
-        );
-        yPosition += 10;
       }
-    });
+      doc.text(
+        `Alamat Kantor: ${formData.jobData.alamatKantor}`,
+        20,
+        yPosition
+      );
+      yPosition += 15;
 
-    // Save PDF
-    doc.save(`data-klien-${formData.personalData.namaLengkap}.pdf`);
-    toast.success("PDF berhasil didownload");
+      // Debt Data Section
+      doc.setFontSize(14);
+      doc.text("Rincian Hutang", 20, yPosition);
+      yPosition += 10;
+
+      doc.setFontSize(10);
+      formData.debtData.debts.forEach((debt, index) => {
+        if (debt.jenisHutang) {
+          doc.text(
+            `${index + 1}. Jenis Hutang: ${debt.jenisHutang}`,
+            20,
+            yPosition
+          );
+          yPosition += 7;
+          doc.text(`   Bank/Provider: ${debt.bankProvider}`, 20, yPosition);
+          yPosition += 7;
+          doc.text(
+            `   Nomor Kartu/Kontrak: ${debt.nomorKartuKontrak}`,
+            20,
+            yPosition
+          );
+          yPosition += 7;
+          doc.text(`   Sisa Hutang: Rp ${debt.sisaHutang}`, 20, yPosition);
+          yPosition += 10;
+        }
+      });
+
+      // Save PDF
+      doc.save(`data-klien-${formData.personalData.namaLengkap}.pdf`);
+      toast.success("PDF berhasil didownload");
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      toast.error("Gagal membuat PDF");
+    }
   };
 
   const handleSubmit = async () => {
@@ -568,13 +609,20 @@ export default function ClientDataPage() {
           <Input
             id="nik"
             value={formData.personalData.nik}
-            onChange={(e) =>
-              updateFormData("personalData", { nik: e.target.value })
-            }
-            placeholder="Masukkan NIK"
+            onChange={(e) => {
+              const value = e.target.value.replace(/[^\d]/g, ""); // Only numbers
+              if (value.length <= 16) {
+                updateFormData("personalData", { nik: value });
+              }
+            }}
+            placeholder="Masukkan NIK (16 digit)"
             maxLength={16}
             required
           />
+          {formData.personalData.nik &&
+            formData.personalData.nik.length !== 16 && (
+              <p className="text-xs text-red-500">NIK harus 16 digit</p>
+            )}
         </div>
       </div>
 
@@ -667,12 +715,19 @@ export default function ClientDataPage() {
           <Input
             id="noTelepon"
             value={formData.contactData.noTelepon}
-            onChange={(e) =>
-              updateFormData("contactData", { noTelepon: e.target.value })
-            }
-            placeholder="Masukkan nomor telepon"
+            onChange={(e) => {
+              const value = e.target.value.replace(/[^\d]/g, ""); // Only numbers
+              updateFormData("contactData", { noTelepon: value });
+            }}
+            placeholder="Masukkan nomor telepon (minimal 10 digit)"
             required
           />
+          {formData.contactData.noTelepon &&
+            formData.contactData.noTelepon.length < 10 && (
+              <p className="text-xs text-red-500">
+                Nomor telepon minimal 10 digit
+              </p>
+            )}
         </div>
         <div className="space-y-2">
           <Label htmlFor="email">Email</Label>
@@ -900,7 +955,9 @@ export default function ClientDataPage() {
       </div>
 
       <div className="border-t pt-4">
-        <h4 className="font-medium mb-4">Kontak Darurat (opsional)</h4>
+        <h4 className="font-medium mb-4 dark:text-gray-200">
+          Kontak Darurat (opsional)
+        </h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="namaKontakDarurat">Nama Kontak Darurat</Label>
@@ -942,11 +999,14 @@ export default function ClientDataPage() {
 
   const renderDebtDataStep = () => {
     const addDebtEntry = () => {
+      // Use a deterministic ID based on the current debts array length
+      const nextId = (formData.debtData.debts.length + 1).toString();
       const newDebt: DebtEntry = {
-        id: Date.now().toString(),
+        id: nextId,
         jenisHutang: "",
         bankProvider: "",
         nomorKartuKontrak: "",
+        sisaHutang: "",
       };
       setFormData((prev) => ({
         ...prev,
@@ -973,9 +1033,16 @@ export default function ClientDataPage() {
       setFormData((prev) => ({
         ...prev,
         debtData: {
-          debts: prev.debtData.debts.map((debt) =>
-            debt.id === id ? { ...debt, [field]: value } : debt
-          ),
+          debts: prev.debtData.debts.map((debt) => {
+            if (debt.id === id) {
+              // Jika jenisHutang berubah, reset bankProvider
+              if (field === "jenisHutang" && debt.jenisHutang !== value) {
+                return { ...debt, jenisHutang: value, bankProvider: "" };
+              }
+              return { ...debt, [field]: value };
+            }
+            return debt;
+          }),
         },
       }));
     };
@@ -995,116 +1062,213 @@ export default function ClientDataPage() {
 
     return (
       <div className="space-y-4">
-        {formData.debtData.debts.map((debt, index) => (
-          <Card key={debt.id} className="p-4">
-            <div className="flex justify-between items-center mb-4">
-              <h4 className="font-medium">Hutang {index + 1}</h4>
-              {formData.debtData.debts.length > 1 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => removeDebtEntry(debt.id)}
-                  className="text-red-600 hover:text-red-700"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
-
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor={`jenisHutang-${debt.id}`}>Jenis Hutang *</Label>
-                <Select
-                  value={debt.jenisHutang}
-                  onValueChange={(value) => {
-                    updateDebtEntry(debt.id, "jenisHutang", value);
-                    // Reset bank provider when debt type changes
-                    updateDebtEntry(debt.id, "bankProvider", "");
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Pilih jenis hutang" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="kartu-kredit">Kartu Kredit</SelectItem>
-                    <SelectItem value="kta">
-                      KTA (Kredit Tanpa Agunan)
-                    </SelectItem>
-                    <SelectItem value="pinjaman-online">
-                      Pinjaman Online
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+        {formData.debtData.debts.map((debt, index) => {
+          const providers = getProvidersForDebtType(debt.jenisHutang);
+          return (
+            <Card key={debt.id} className="p-4">
+              <div className="flex justify-between items-center mb-4">
+                <h4 className="font-medium dark:text-gray-200">
+                  Hutang {index + 1}
+                </h4>
+                {formData.debtData.debts.length > 1 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => removeDebtEntry(debt.id)}
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor={`bankProvider-${debt.id}`}>
-                  Bank/Provider *
-                </Label>
-                <Select
-                  value={debt.bankProvider}
-                  onValueChange={(value) =>
-                    updateDebtEntry(debt.id, "bankProvider", value)
-                  }
-                  disabled={!debt.jenisHutang || !providersLoaded}
-                >
-                  <SelectTrigger>
-                    <SelectValue
-                      placeholder={
-                        !providersLoaded
-                          ? "Loading providers..."
-                          : !debt.jenisHutang
-                          ? "Pilih jenis hutang terlebih dahulu"
-                          : "Pilih bank/provider"
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {debt.jenisHutang &&
-                      providersLoaded &&
-                      getProvidersForDebtType(debt.jenisHutang).map(
-                        (provider, providerIndex) => (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor={`jenisHutang-${debt.id}`}>
+                    Jenis Hutang *
+                  </Label>
+                  <Select
+                    value={debt.jenisHutang}
+                    onValueChange={(value) =>
+                      updateDebtEntry(debt.id, "jenisHutang", value)
+                    }
+                  >
+                    <SelectTrigger
+                      className={debt.jenisHutang ? "border-green-200" : ""}
+                    >
+                      <SelectValue placeholder="Pilih jenis hutang" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="kartu-kredit">
+                        <div className="flex items-center gap-2">
+                          <CreditCard className="h-4 w-4" />
+                          Kartu Kredit
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="kta">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4" />
+                          KTA (Kredit Tanpa Agunan)
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="pinjaman-online">
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4" />
+                          Pinjaman Online
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {debt.jenisHutang && (
+                    <p className="text-xs text-green-600">
+                      ✓ Jenis hutang dipilih
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor={`bankProvider-${debt.id}`}>
+                    Bank/Provider *
+                  </Label>
+                  <Select
+                    value={debt.bankProvider}
+                    onValueChange={(value) =>
+                      updateDebtEntry(debt.id, "bankProvider", value)
+                    }
+                    disabled={!debt.jenisHutang || !providersLoaded}
+                  >
+                    <SelectTrigger
+                      className={debt.bankProvider ? "border-green-200" : ""}
+                    >
+                      <SelectValue
+                        placeholder={
+                          !providersLoaded
+                            ? "Loading providers..."
+                            : !debt.jenisHutang
+                            ? "Pilih jenis hutang terlebih dahulu"
+                            : providers.length === 0
+                            ? `No providers available for ${debt.jenisHutang}`
+                            : "Pilih bank/provider"
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {!providersLoaded ? (
+                        <SelectItem value="loading" disabled>
+                          Loading providers...
+                        </SelectItem>
+                      ) : !debt.jenisHutang ? (
+                        <SelectItem value="no-type" disabled>
+                          Pilih jenis hutang terlebih dahulu
+                        </SelectItem>
+                      ) : providers.length === 0 ? (
+                        <SelectItem value="no-providers" disabled>
+                          No providers available for {debt.jenisHutang}
+                        </SelectItem>
+                      ) : (
+                        providers.map((provider, providerIndex) => (
                           <SelectItem
                             key={`${debt.id}-${debt.jenisHutang}-${provider}-${providerIndex}`}
                             value={provider}
                           >
                             {provider}
                           </SelectItem>
-                        )
+                        ))
                       )}
-                    {debt.jenisHutang &&
-                      providersLoaded &&
-                      getProvidersForDebtType(debt.jenisHutang).length ===
-                        0 && (
-                        <SelectItem value="" disabled>
-                          No providers available
-                        </SelectItem>
-                      )}
-                  </SelectContent>
-                </Select>
-              </div>
+                    </SelectContent>
+                  </Select>
+                  {debt.bankProvider && (
+                    <p className="text-xs text-green-600">
+                      ✓ Provider dipilih: {debt.bankProvider}
+                    </p>
+                  )}
+                </div>
 
-              <div className="space-y-2">
-                <Label htmlFor={`nomorKartuKontrak-${debt.id}`}>
-                  Nomor Kartu/Kontrak *
-                </Label>
-                <Input
-                  id={`nomorKartuKontrak-${debt.id}`}
-                  value={debt.nomorKartuKontrak}
-                  onChange={(e) =>
-                    updateDebtEntry(
-                      debt.id,
-                      "nomorKartuKontrak",
-                      e.target.value
-                    )
-                  }
-                  placeholder="Masukkan nomor kartu atau kontrak"
-                  required
-                />
+                <div className="space-y-2">
+                  <Label htmlFor={`nomorKartuKontrak-${debt.id}`}>
+                    Nomor Kartu/Kontrak *
+                  </Label>
+                  <Input
+                    id={`nomorKartuKontrak-${debt.id}`}
+                    value={debt.nomorKartuKontrak}
+                    onChange={(e) => {
+                      // Allow numbers, spaces, and dashes for card/contract numbers
+                      const value = e.target.value.replace(/[^0-9\s-]/g, "");
+                      updateDebtEntry(debt.id, "nomorKartuKontrak", value);
+                    }}
+                    placeholder={
+                      debt.jenisHutang === "kartu-kredit"
+                        ? "Masukkan nomor kartu kredit (16 digit)"
+                        : debt.jenisHutang === "kta"
+                        ? "Masukkan nomor kontrak KTA"
+                        : debt.jenisHutang === "pinjaman-online"
+                        ? "Masukkan nomor kontrak/akun"
+                        : "Masukkan nomor kartu atau kontrak"
+                    }
+                    maxLength={
+                      debt.jenisHutang === "kartu-kredit" ? 19 : undefined
+                    }
+                    className={debt.nomorKartuKontrak ? "border-green-200" : ""}
+                    required
+                  />
+                  {debt.jenisHutang === "kartu-kredit" &&
+                    debt.nomorKartuKontrak &&
+                    debt.nomorKartuKontrak.replace(/\s/g, "").length === 16 && (
+                      <p className="text-xs text-green-600">
+                        ✓ Nomor kartu kredit valid
+                      </p>
+                    )}
+                  {debt.jenisHutang === "kartu-kredit" &&
+                    debt.nomorKartuKontrak &&
+                    debt.nomorKartuKontrak.replace(/\s/g, "").length !== 16 && (
+                      <p className="text-xs text-red-500">
+                        Nomor kartu kredit harus 16 digit
+                      </p>
+                    )}
+                  {debt.jenisHutang &&
+                    debt.jenisHutang !== "kartu-kredit" &&
+                    debt.nomorKartuKontrak && (
+                      <p className="text-xs text-green-600">
+                        ✓ Nomor kontrak diisi
+                      </p>
+                    )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor={`sisaHutang-${debt.id}`}>
+                    Sisa Hutang (Rp) *
+                  </Label>
+                  <Input
+                    id={`sisaHutang-${debt.id}`}
+                    type="text"
+                    value={debt.sisaHutang}
+                    onChange={(e) => {
+                      // Format to currency
+                      const value = e.target.value.replace(/[^\d]/g, "");
+                      const formatted = value.replace(
+                        /\B(?=(\d{3})+(?!\d))/g,
+                        "."
+                      );
+                      updateDebtEntry(debt.id, "sisaHutang", formatted);
+                    }}
+                    placeholder="Contoh: 5.000.000"
+                    className={`${
+                      debt.sisaHutang ? "border-green-200" : ""
+                    } text-right`}
+                  />
+                  {debt.sisaHutang && (
+                    <p className="text-xs text-green-600">
+                      ✓ Sisa hutang: Rp {debt.sisaHutang}
+                    </p>
+                  )}
+                  <p className="text-xs text-gray-500">
+                    Masukkan jumlah hutang yang tersisa dalam rupiah
+                  </p>
+                </div>
               </div>
-            </div>
-          </Card>
-        ))}
+            </Card>
+          );
+        })}
 
         <Button
           type="button"
@@ -1172,8 +1336,10 @@ export default function ClientDataPage() {
         <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
           <div className="max-w-4xl mx-auto w-full">
             <div className="mb-8">
-              <h1 className="text-3xl font-bold text-gray-900">Data Klien</h1>
-              <p className="text-gray-600 mt-2">
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+                Data Klien
+              </h1>
+              <p className="text-gray-600 dark:text-gray-400 mt-2">
                 Lengkapi informasi klien dengan mengikuti langkah-langkah
                 berikut
               </p>
@@ -1182,10 +1348,10 @@ export default function ClientDataPage() {
             {/* Progress Bar */}
             <div className="mb-8">
               <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-medium text-gray-700">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   Langkah {currentStep} dari {STEPS.length}
                 </span>
-                <span className="text-sm text-gray-500">
+                <span className="text-sm text-gray-500 dark:text-gray-400">
                   {Math.round(progress)}% selesai
                 </span>
               </div>
@@ -1295,29 +1461,37 @@ export default function ClientDataPage() {
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <h4 className="font-semibold mb-2">Data Pribadi</h4>
-                      <p className="text-sm text-gray-600">
+                      <h4 className="font-semibold mb-2 dark:text-gray-200">
+                        Data Pribadi
+                      </h4>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
                         {formData.personalData.namaLengkap} -{" "}
                         {formData.personalData.nik}
                       </p>
                     </div>
                     <div>
-                      <h4 className="font-semibold mb-2">Kontak</h4>
-                      <p className="text-sm text-gray-600">
+                      <h4 className="font-semibold mb-2 dark:text-gray-200">
+                        Kontak
+                      </h4>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
                         {formData.contactData.noTelepon} -{" "}
                         {formData.contactData.email}
                       </p>
                     </div>
                     <div>
-                      <h4 className="font-semibold mb-2">Pekerjaan</h4>
-                      <p className="text-sm text-gray-600">
+                      <h4 className="font-semibold mb-2 dark:text-gray-200">
+                        Pekerjaan
+                      </h4>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
                         {formData.jobData.namaPerusahaan} -{" "}
                         {formData.jobData.jabatan}
                       </p>
                     </div>
                     <div>
-                      <h4 className="font-semibold mb-2">Hutang</h4>
-                      <div className="text-sm text-gray-600">
+                      <h4 className="font-semibold mb-2 dark:text-gray-200">
+                        Hutang
+                      </h4>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">
                         {formData.debtData.debts.map((debt, index) => (
                           <p key={debt.id}>
                             {index + 1}. {debt.jenisHutang} -{" "}
