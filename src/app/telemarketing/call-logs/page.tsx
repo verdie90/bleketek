@@ -100,8 +100,11 @@ import { cn } from "@/lib/utils";
 import { useCallLogs, CallLogsFilter } from "@/hooks/use-call-logs";
 import { CallLogsFilters } from "@/components/call-logs-filters";
 import { exportCallLogsToExcel, exportCallLogsToPDF } from "@/lib/export-utils";
+import { TablePageSkeleton } from "@/components/ui/page-skeletons";
+import { usePageLoading } from "@/hooks/use-page-loading";
 
 export default function CallLogsPage() {
+  const isPageLoading = usePageLoading(1000);
   const {
     callLogs,
     loading,
@@ -344,17 +347,8 @@ export default function CallLogsPage() {
     return { total, completed, missed, totalDuration, avgDuration };
   }, [filteredCallLogs]);
 
-  if (loading) {
-    return (
-      <SidebarProvider>
-        <AppSidebar />
-        <SidebarInset>
-          <div className="flex items-center justify-center h-screen">
-            <div className="text-lg">Loading call logs...</div>
-          </div>
-        </SidebarInset>
-      </SidebarProvider>
-    );
+  if (isPageLoading || loading) {
+    return <TablePageSkeleton />;
   }
 
   return (

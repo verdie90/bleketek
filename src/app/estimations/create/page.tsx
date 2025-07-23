@@ -79,6 +79,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { FormPageSkeleton } from "@/components/ui/page-skeletons";
 
 interface User {
   id: string;
@@ -130,6 +131,7 @@ interface DebtType {
 }
 
 export default function CreateEstimationPage() {
+  const [isPageLoading, setIsPageLoading] = useState(true);
   const [estimationNumber, setEstimationNumber] = useState("");
   const [showPreview, setShowPreview] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
@@ -201,6 +203,15 @@ export default function CreateEstimationPage() {
     fetchUsers();
     fetchProspectSources();
     generateEstimationNumber();
+  }, []);
+
+  // Page loading effect
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsPageLoading(false);
+    }, 1500);
+
+    return () => clearTimeout(timer);
   }, []);
 
   const fetchDebtTypes = async () => {
@@ -862,6 +873,10 @@ export default function CreateEstimationPage() {
       }
     }
   };
+
+  if (isPageLoading || debtTypesLoading) {
+    return <FormPageSkeleton />;
+  }
 
   return (
     <SidebarProvider>

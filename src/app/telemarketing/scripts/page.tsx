@@ -59,8 +59,11 @@ import {
   ScriptsFilter,
 } from "@/hooks/use-telemarketing-scripts";
 import { ScriptEditorModal } from "@/components/script-editor-modal";
+import { CardGridSkeleton } from "@/components/ui/page-skeletons";
+import { usePageLoading } from "@/hooks/use-page-loading";
 
 export default function TelemarketingScriptsPage() {
+  const isPageLoading = usePageLoading(1000);
   const {
     scripts,
     loading,
@@ -150,18 +153,10 @@ export default function TelemarketingScriptsPage() {
     return { total, active, totalUsage };
   }, [scripts]);
 
-  if (loading) {
-    return (
-      <SidebarProvider>
-        <AppSidebar />
-        <SidebarInset>
-          <div className="flex items-center justify-center h-screen">
-            <div className="text-lg">Loading scripts...</div>
-          </div>
-        </SidebarInset>
-      </SidebarProvider>
-    );
+  if (isPageLoading || loading) {
+    return <CardGridSkeleton />;
   }
+  
   return (
     <SidebarProvider>
       <AppSidebar />

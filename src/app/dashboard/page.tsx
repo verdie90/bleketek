@@ -23,8 +23,15 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { ProtectedRoute } from "@/components/protected-route";
+import { DashboardSkeleton } from "@/components/ui/page-skeletons";
+import { usePageLoading } from "@/hooks/use-page-loading";
 
 export default function DashboardPage() {
+  const isLoading = usePageLoading(1000);
+
+  if (isLoading) {
+    return <DashboardSkeleton />;
+  }
   return (
     <ProtectedRoute>
       <SidebarProvider>

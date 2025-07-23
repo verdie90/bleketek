@@ -43,10 +43,12 @@ import {
   formatTimeUntilWorking,
   getWorkingScheduleSummary,
 } from "@/lib/working-schedule";
-
 import { useAuth } from "@/hooks/use-auth";
+import { CardGridSkeleton } from "@/components/ui/page-skeletons";
+import { usePageLoading } from "@/hooks/use-page-loading";
 
 export default function TelemarketingCallsPage() {
+  const isPageLoading = usePageLoading(1000);
   const { user } = useAuth();
   const {
     currentSession,
@@ -111,6 +113,10 @@ export default function TelemarketingCallsPage() {
     currentSession?.duration,
     loading,
   ]);
+
+  if (isPageLoading || loading) {
+    return <CardGridSkeleton />;
+  }
 
   return (
     <SidebarProvider>
