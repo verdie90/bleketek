@@ -78,6 +78,9 @@ import {
   Eye,
   Calendar,
   Tag,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { format as formatDate } from "date-fns";
 import { Timestamp } from "firebase/firestore";
@@ -115,6 +118,7 @@ export default function TelemarketingProspectsPage() {
   const [editingProspect, setEditingProspect] = useState<any>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [showBulkActions, setShowBulkActions] = useState(false);
 
   // useEffect hooks
   useEffect(() => {
@@ -126,7 +130,26 @@ export default function TelemarketingProspectsPage() {
   // useMemo hooks
   const filteredProspects = useMemo(() => {
     if (!prospects || prospects.length === 0) return [];
-    return filterProspects(currentFilter);
+    let filtered = filterProspects(currentFilter);
+    
+    // Sort by lastContactDate (newest first), then by createdAt (newest first)
+    filtered.sort((a, b) => {
+      // First, sort by lastContactDate
+      if (a.lastContactDate && b.lastContactDate) {
+        return b.lastContactDate.toMillis() - a.lastContactDate.toMillis();
+      }
+      if (a.lastContactDate && !b.lastContactDate) {
+        return -1; // a has contact date, b doesn't - a comes first
+      }
+      if (!a.lastContactDate && b.lastContactDate) {
+        return 1; // b has contact date, a doesn't - b comes first
+      }
+      
+      // If both don't have lastContactDate, sort by createdAt (newest first)
+      return b.createdAt.toMillis() - a.createdAt.toMillis();
+    });
+    
+    return filtered;
   }, [prospects, currentFilter, filterProspects]);
 
   const paginatedProspects = useMemo(() => {
@@ -137,13 +160,13 @@ export default function TelemarketingProspectsPage() {
 
   const stats = useMemo(() => {
     const total = filteredProspects.length;
-    const pending = filteredProspects.filter((p) => p.status === "pending").length;
-    const contacted = filteredProspects.filter((p) => p.status === "contacted").length;
-    const qualified = filteredProspects.filter((p) => p.status === "qualified").length;
-    const converted = filteredProspects.filter((p) => p.status === "converted").length;
-    const rejected = filteredProspects.filter((p) => p.status === "rejected").length;
+    const respon = filteredProspects.filter((p) => p.status === "pending").length;
+    const tidakAktif = filteredProspects.filter((p) => p.status === "contacted").length;
+    const janjiTelepon = filteredProspects.filter((p) => p.status === "qualified").length;
+    const noProgram = filteredProspects.filter((p) => p.status === "converted").length;
+    const tidakMinat = filteredProspects.filter((p) => p.status === "rejected").length;
 
-    return { total, pending, contacted, qualified, converted, rejected };
+    return { total, respon, tidakAktif, janjiTelepon, noProgram, tidakMinat };
   }, [filteredProspects]);
 
   const totalPages = Math.ceil(filteredProspects.length / itemsPerPage);
@@ -207,14 +230,31 @@ export default function TelemarketingProspectsPage() {
 
     try {
       if (action === "delete") {
-        await bulkDeleteProspects(selectedProspects);
+        if (confirm(`Yakin ingin menghapus ${selectedProspects.length} prospects yang dipilih?`)) {
+          await bulkDeleteProspects(selectedProspects);
+          setSelectedProspects([]);
+          setShowBulkActions(false);
+        }
       } else {
         await bulkUpdateProspects(selectedProspects, data);
+        setSelectedProspects([]);
+        setShowBulkActions(false);
       }
-      setSelectedProspects([]);
     } catch (error) {
       console.error("Bulk action failed:", error);
     }
+  };
+
+  const handleBulkStatusChange = (newStatus: string) => {
+    handleBulkAction("updateStatus", { status: newStatus });
+  };
+
+  const handleBulkSourceChange = (newSource: string) => {
+    handleBulkAction("updateSource", { source: newSource });
+  };
+
+  const handleBulkAssignedToChange = (newAssignedTo: string) => {
+    handleBulkAction("updateAssignedTo", { assignedTo: newAssignedTo === "unassigned" ? null : newAssignedTo });
   };
 
   const handleAddProspect = () => {
@@ -282,14 +322,14 @@ export default function TelemarketingProspectsPage() {
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Pending</CardTitle>
+                <CardTitle className="text-sm font-medium">Respon</CardTitle>
                 <UserPlus className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stats.pending}</div>
+                <div className="text-2xl font-bold">{stats.respon}</div>
                 <p className="text-xs text-muted-foreground">
                   {stats.total > 0
-                    ? Math.round((stats.pending / stats.total) * 100)
+                    ? Math.round((stats.respon / stats.total) * 100)
                     : 0}
                   % dari total
                 </p>
@@ -298,14 +338,14 @@ export default function TelemarketingProspectsPage() {
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Contacted</CardTitle>
+                <CardTitle className="text-sm font-medium">Tidak Aktif</CardTitle>
                 <Phone className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stats.contacted}</div>
+                <div className="text-2xl font-bold">{stats.tidakAktif}</div>
                 <p className="text-xs text-muted-foreground">
                   {stats.total > 0
-                    ? Math.round((stats.contacted / stats.total) * 100)
+                    ? Math.round((stats.tidakAktif / stats.total) * 100)
                     : 0}
                   % dari total
                 </p>
@@ -314,14 +354,14 @@ export default function TelemarketingProspectsPage() {
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Qualified</CardTitle>
+                <CardTitle className="text-sm font-medium">Janji Telepon</CardTitle>
                 <UserPlus className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stats.qualified}</div>
+                <div className="text-2xl font-bold">{stats.janjiTelepon}</div>
                 <p className="text-xs text-muted-foreground">
                   {stats.total > 0
-                    ? Math.round((stats.qualified / stats.total) * 100)
+                    ? Math.round((stats.janjiTelepon / stats.total) * 100)
                     : 0}
                   % dari total
                 </p>
@@ -330,14 +370,14 @@ export default function TelemarketingProspectsPage() {
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Converted</CardTitle>
+                <CardTitle className="text-sm font-medium">No Program</CardTitle>
                 <UserPlus className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stats.converted}</div>
+                <div className="text-2xl font-bold">{stats.noProgram}</div>
                 <p className="text-xs text-muted-foreground">
                   {stats.total > 0
-                    ? Math.round((stats.converted / stats.total) * 100)
+                    ? Math.round((stats.noProgram / stats.total) * 100)
                     : 0}
                   % dari total
                 </p>
@@ -346,14 +386,14 @@ export default function TelemarketingProspectsPage() {
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Rejected</CardTitle>
+                <CardTitle className="text-sm font-medium">Tidak Minat</CardTitle>
                 <UserPlus className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stats.rejected}</div>
+                <div className="text-2xl font-bold">{stats.tidakMinat}</div>
                 <p className="text-xs text-muted-foreground">
                   {stats.total > 0
-                    ? Math.round((stats.rejected / stats.total) * 100)
+                    ? Math.round((stats.tidakMinat / stats.total) * 100)
                     : 0}
                   % dari total
                 </p>
@@ -401,22 +441,101 @@ export default function TelemarketingProspectsPage() {
 
           {/* Bulk Actions */}
           {selectedProspects.length > 0 && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">
-                  {selectedProspects.length} prospects selected
-                </span>
-                <div className="flex gap-2">
-                  <Button 
-                    size="sm" 
+            <Card className="bg-blue-50 border-blue-200">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">
+                      {selectedProspects.length} prospects dipilih
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setShowBulkActions(!showBulkActions)}
+                    >
+                      {showBulkActions ? "Hide Actions" : "Show Actions"}
+                    </Button>
+                  </div>
+                  <Button
+                    size="sm"
                     variant="outline"
-                    onClick={() => handleBulkAction("delete")}
+                    onClick={() => setSelectedProspects([])}
                   >
-                    Delete Selected
+                    Clear Selection
                   </Button>
                 </div>
-              </div>
-            </div>
+
+                {showBulkActions && (
+                  <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-3">
+                    {/* Bulk Status Change */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-gray-700">Change Status:</label>
+                      <Select onValueChange={handleBulkStatusChange}>
+                        <SelectTrigger className="h-8">
+                          <SelectValue placeholder="Select status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {prospectStatuses.map((status) => (
+                            <SelectItem key={status.id} value={status.name}>
+                              {status.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Bulk Source Change */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-gray-700">Change Source:</label>
+                      <Select onValueChange={handleBulkSourceChange}>
+                        <SelectTrigger className="h-8">
+                          <SelectValue placeholder="Select source" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {prospectSources.map((source) => (
+                            <SelectItem key={source.id} value={source.name}>
+                              {source.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Bulk Assigned To Change */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-gray-700">Assign To:</label>
+                      <Select onValueChange={handleBulkAssignedToChange}>
+                        <SelectTrigger className="h-8">
+                          <SelectValue placeholder="Select user" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="unassigned">Unassigned</SelectItem>
+                          {users.map((user) => (
+                            <SelectItem key={user.id} value={user.id || ''}>
+                              {user.displayName || user.email}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Bulk Delete */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-gray-700">Bulk Actions:</label>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        className="w-full h-8"
+                        onClick={() => handleBulkAction("delete")}
+                      >
+                        <Trash2 className="h-3 w-3 mr-1" />
+                        Delete All
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           )}
 
           {/* Table */}
@@ -450,7 +569,12 @@ export default function TelemarketingProspectsPage() {
                       <TableHead>Status</TableHead>
                       <TableHead>Source</TableHead>
                       <TableHead>Assigned To</TableHead>
-                      <TableHead>Last Contact</TableHead>
+                      <TableHead className="cursor-default">
+                        <div className="flex items-center gap-1">
+                          Last Contact
+                          <ArrowDown className="h-3 w-3 text-muted-foreground" />
+                        </div>
+                      </TableHead>
                       <TableHead>Tags</TableHead>
                       <TableHead className="w-[70px]">Actions</TableHead>
                     </TableRow>
