@@ -9,6 +9,7 @@ import {
   LogOut,
   Sparkles,
   User,
+  Palette,
 } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -28,6 +29,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/use-auth";
+import { ThemeToggleSimple } from "@/components/ui/theme-toggle";
 
 export function NavUser() {
   const { isMobile } = useSidebar();
@@ -117,6 +119,15 @@ export function NavUser() {
               <DropdownMenuItem>
                 <Bell />
                 Notifications
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <div className="flex items-center w-full">
+                  <Palette className="mr-2 h-4 w-4" />
+                  Theme
+                  <div className="ml-auto">
+                    <ThemeToggleSimple />
+                  </div>
+                </div>
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />

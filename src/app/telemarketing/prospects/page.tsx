@@ -91,6 +91,7 @@ import { AddEditProspectModal } from "@/components/add-edit-prospect-modal";
 import { exportToExcel, exportToPDF, ExportHelper } from "@/lib/export-utils";
 import { TablePageSkeleton } from "@/components/ui/page-skeletons";
 import { usePageLoading } from "@/hooks/use-page-loading";
+import { ThemeToggle, ThemeToggleSimple } from "@/components/ui/theme-toggle";
 
 export default function TelemarketingProspectsPage() {
   // ALL HOOKS MUST BE AT THE TOP - NEVER CONDITIONAL
@@ -122,13 +123,6 @@ export default function TelemarketingProspectsPage() {
 
   // useEffect hooks
   useEffect(() => {
-<<<<<<< HEAD
-    const prospectsWithLastContact = prospects.filter((p) => p.lastContactDate);
-
-    // Debug: Log prospects with assignedTo
-    const prospectsWithAssignment = prospects.filter((p) => p.assignedTo);
-  }, [prospects, users]);
-=======
     if (prospects.length > 0) {
       console.log("📊 Total prospects loaded:", prospects.length);
     }
@@ -138,7 +132,7 @@ export default function TelemarketingProspectsPage() {
   const filteredProspects = useMemo(() => {
     if (!prospects || prospects.length === 0) return [];
     let filtered = filterProspects(currentFilter);
-    
+
     // Sort by lastContactDate (newest first), then by createdAt (newest first)
     filtered.sort((a, b) => {
       // First, sort by lastContactDate
@@ -151,11 +145,11 @@ export default function TelemarketingProspectsPage() {
       if (!a.lastContactDate && b.lastContactDate) {
         return 1; // b has contact date, a doesn't - b comes first
       }
-      
+
       // If both don't have lastContactDate, sort by createdAt (newest first)
       return b.createdAt.toMillis() - a.createdAt.toMillis();
     });
-    
+
     return filtered;
   }, [prospects, currentFilter, filterProspects]);
 
@@ -164,15 +158,24 @@ export default function TelemarketingProspectsPage() {
     const endIndex = startIndex + itemsPerPage;
     return filteredProspects.slice(startIndex, endIndex);
   }, [filteredProspects, currentPage, itemsPerPage]);
->>>>>>> 96ac4a3188e3be6678281adbc0afdbdaed8a490e
 
   const stats = useMemo(() => {
     const total = filteredProspects.length;
-    const respon = filteredProspects.filter((p) => p.status === "pending").length;
-    const tidakAktif = filteredProspects.filter((p) => p.status === "contacted").length;
-    const janjiTelepon = filteredProspects.filter((p) => p.status === "qualified").length;
-    const noProgram = filteredProspects.filter((p) => p.status === "converted").length;
-    const tidakMinat = filteredProspects.filter((p) => p.status === "rejected").length;
+    const respon = filteredProspects.filter(
+      (p) => p.status === "pending"
+    ).length;
+    const tidakAktif = filteredProspects.filter(
+      (p) => p.status === "contacted"
+    ).length;
+    const janjiTelepon = filteredProspects.filter(
+      (p) => p.status === "qualified"
+    ).length;
+    const noProgram = filteredProspects.filter(
+      (p) => p.status === "converted"
+    ).length;
+    const tidakMinat = filteredProspects.filter(
+      (p) => p.status === "rejected"
+    ).length;
 
     return { total, respon, tidakAktif, janjiTelepon, noProgram, tidakMinat };
   }, [filteredProspects]);
@@ -202,10 +205,6 @@ export default function TelemarketingProspectsPage() {
 
   const getAssignedToLabel = (userId?: string) => {
     if (!userId) return "Unassigned";
-<<<<<<< HEAD
-
-=======
->>>>>>> 96ac4a3188e3be6678281adbc0afdbdaed8a490e
     const user = users.find((u) => u.id === userId);
     return user ? user.displayName || user.email : "User tidak ditemukan";
   };
@@ -242,7 +241,11 @@ export default function TelemarketingProspectsPage() {
 
     try {
       if (action === "delete") {
-        if (confirm(`Yakin ingin menghapus ${selectedProspects.length} prospects yang dipilih?`)) {
+        if (
+          confirm(
+            `Yakin ingin menghapus ${selectedProspects.length} prospects yang dipilih?`
+          )
+        ) {
           await bulkDeleteProspects(selectedProspects);
           setSelectedProspects([]);
           setShowBulkActions(false);
@@ -266,7 +269,9 @@ export default function TelemarketingProspectsPage() {
   };
 
   const handleBulkAssignedToChange = (newAssignedTo: string) => {
-    handleBulkAction("updateAssignedTo", { assignedTo: newAssignedTo === "unassigned" ? null : newAssignedTo });
+    handleBulkAction("updateAssignedTo", {
+      assignedTo: newAssignedTo === "unassigned" ? null : newAssignedTo,
+    });
   };
 
   const handleAddProspect = () => {
@@ -274,7 +279,17 @@ export default function TelemarketingProspectsPage() {
     setIsAddEditModalOpen(true);
   };
 
-<<<<<<< HEAD
+  const handleEditProspect = (prospect: any) => {
+    setEditingProspect(prospect);
+    setIsAddEditModalOpen(true);
+  };
+
+  const handleDeleteProspect = async (id: string) => {
+    if (confirm("Yakin ingin menghapus prospect ini?")) {
+      await deleteProspect(id);
+    }
+  };
+
   const handleSaveProspect = async (data: any) => {
     let result;
     if (editingProspect) {
@@ -294,50 +309,14 @@ export default function TelemarketingProspectsPage() {
     return result;
   };
 
-  // Calculate statistics based on filteredProspects (which includes all active filters)
-  const stats = useMemo(() => {
-    const total = filteredProspects.length;
-    // Anggap status respon bisa berupa 'contacted', 'responded', 'respon' (case-insensitive)
-    const responded = filteredProspects.filter((p) => {
-      const status = (p.status || "").toLowerCase();
-      return (
-        status.includes("respon") ||
-        status === "contacted" ||
-        status === "responded"
-      );
-    }).length;
-    const callback = filteredProspects.filter((p) => {
-      const status = (p.status || "").toLowerCase();
-      return (
-        status.includes("callback") ||
-        status.includes("janji") ||
-        status === "follow_up"
-      );
-    }).length;
-    const notInterested = filteredProspects.filter((p) => {
-      const status = (p.status || "").toLowerCase();
-      return (
-        status.includes("tidak minat") ||
-        status.includes("tidak tertarik") ||
-        status === "not_interested" ||
-        status === "not interested"
-      );
-    }).length;
-=======
-  const handleEditProspect = (prospect: any) => {
-    setEditingProspect(prospect);
-    setIsAddEditModalOpen(true);
-  };
-
-  const handleDeleteProspect = async (id: string) => {
-    if (confirm("Yakin ingin menghapus prospect ini?")) {
-      await deleteProspect(id);
-    }
-  };
->>>>>>> 96ac4a3188e3be6678281adbc0afdbdaed8a490e
-
   const handleExport = (format: "excel" | "pdf") => {
-    console.log("Export to", format, "with", filteredProspects.length, "prospects");
+    console.log(
+      "Export to",
+      format,
+      "with",
+      filteredProspects.length,
+      "prospects"
+    );
     // Export functionality will be implemented later
   };
 
@@ -346,7 +325,7 @@ export default function TelemarketingProspectsPage() {
       <AppSidebar />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
-          <div className="flex items-center gap-2 px-4">
+          <div className="flex items-center gap-2 px-4 flex-1">
             <SidebarTrigger className="-ml-1" />
             <Separator orientation="vertical" className="mr-2 h-4" />
             <Breadcrumb>
@@ -365,6 +344,14 @@ export default function TelemarketingProspectsPage() {
               </BreadcrumbList>
             </Breadcrumb>
           </div>
+          <div className="flex items-center gap-2 px-4">
+            <div className="hidden sm:block">
+              <ThemeToggle />
+            </div>
+            <div className="sm:hidden">
+              <ThemeToggleSimple />
+            </div>
+          </div>
         </header>
 
         <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
@@ -377,9 +364,7 @@ export default function TelemarketingProspectsPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{stats.total}</div>
-                <p className="text-xs text-muted-foreground">
-                  Total prospects
-                </p>
+                <p className="text-xs text-muted-foreground">Total prospects</p>
               </CardContent>
             </Card>
 
@@ -401,7 +386,9 @@ export default function TelemarketingProspectsPage() {
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Tidak Aktif</CardTitle>
+                <CardTitle className="text-sm font-medium">
+                  Tidak Aktif
+                </CardTitle>
                 <Phone className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
@@ -417,7 +404,9 @@ export default function TelemarketingProspectsPage() {
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Janji Telepon</CardTitle>
+                <CardTitle className="text-sm font-medium">
+                  Janji Telepon
+                </CardTitle>
                 <UserPlus className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
@@ -433,7 +422,9 @@ export default function TelemarketingProspectsPage() {
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">No Program</CardTitle>
+                <CardTitle className="text-sm font-medium">
+                  No Program
+                </CardTitle>
                 <UserPlus className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
@@ -449,7 +440,9 @@ export default function TelemarketingProspectsPage() {
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Tidak Minat</CardTitle>
+                <CardTitle className="text-sm font-medium">
+                  Tidak Minat
+                </CardTitle>
                 <UserPlus className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
@@ -532,7 +525,9 @@ export default function TelemarketingProspectsPage() {
                   <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-3">
                     {/* Bulk Status Change */}
                     <div className="space-y-2">
-                      <label className="text-xs font-medium text-gray-700">Change Status:</label>
+                      <label className="text-xs font-medium text-gray-700">
+                        Change Status:
+                      </label>
                       <Select onValueChange={handleBulkStatusChange}>
                         <SelectTrigger className="h-8">
                           <SelectValue placeholder="Select status" />
@@ -549,7 +544,9 @@ export default function TelemarketingProspectsPage() {
 
                     {/* Bulk Source Change */}
                     <div className="space-y-2">
-                      <label className="text-xs font-medium text-gray-700">Change Source:</label>
+                      <label className="text-xs font-medium text-gray-700">
+                        Change Source:
+                      </label>
                       <Select onValueChange={handleBulkSourceChange}>
                         <SelectTrigger className="h-8">
                           <SelectValue placeholder="Select source" />
@@ -566,7 +563,9 @@ export default function TelemarketingProspectsPage() {
 
                     {/* Bulk Assigned To Change */}
                     <div className="space-y-2">
-                      <label className="text-xs font-medium text-gray-700">Assign To:</label>
+                      <label className="text-xs font-medium text-gray-700">
+                        Assign To:
+                      </label>
                       <Select onValueChange={handleBulkAssignedToChange}>
                         <SelectTrigger className="h-8">
                           <SelectValue placeholder="Select user" />
@@ -574,7 +573,7 @@ export default function TelemarketingProspectsPage() {
                         <SelectContent>
                           <SelectItem value="unassigned">Unassigned</SelectItem>
                           {users.map((user) => (
-                            <SelectItem key={user.id} value={user.id || ''}>
+                            <SelectItem key={user.id} value={user.id || ""}>
                               {user.displayName || user.email}
                             </SelectItem>
                           ))}
@@ -584,7 +583,9 @@ export default function TelemarketingProspectsPage() {
 
                     {/* Bulk Delete */}
                     <div className="space-y-2">
-                      <label className="text-xs font-medium text-gray-700">Bulk Actions:</label>
+                      <label className="text-xs font-medium text-gray-700">
+                        Bulk Actions:
+                      </label>
                       <Button
                         size="sm"
                         variant="destructive"
@@ -605,9 +606,7 @@ export default function TelemarketingProspectsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Prospects ({filteredProspects.length})</CardTitle>
-              <CardDescription>
-                Manage your prospect database
-              </CardDescription>
+              <CardDescription>Manage your prospect database</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="rounded-md border">
@@ -675,7 +674,9 @@ export default function TelemarketingProspectsPage() {
                             <div className="space-y-1">
                               <div className="flex items-center gap-1">
                                 <Phone className="h-3 w-3" />
-                                <span className="text-sm">{prospect.phoneNumber}</span>
+                                <span className="text-sm">
+                                  {prospect.phoneNumber}
+                                </span>
                               </div>
                             </div>
                           </TableCell>
@@ -684,64 +685,13 @@ export default function TelemarketingProspectsPage() {
                               {getStatusLabel(prospect.status)}
                             </Badge>
                           </TableCell>
-                          <TableCell>{getSourceLabel(prospect.source)}</TableCell>
+                          <TableCell>
+                            {getSourceLabel(prospect.source)}
+                          </TableCell>
                           <TableCell>
                             {getAssignedToLabel(prospect.assignedTo)}
                           </TableCell>
                           <TableCell>
-<<<<<<< HEAD
-                            {(() => {
-                              const assignedTo = prospect.assignedTo || "";
-                              const label = getAssignedToLabel(assignedTo);
-
-                              if (!assignedTo) {
-                                return (
-                                  <Badge
-                                    variant="secondary"
-                                    className="text-muted-foreground"
-                                  >
-                                    Unassigned
-                                  </Badge>
-                                );
-                              }
-
-                              if (label.startsWith("Unknown User")) {
-                                return (
-                                  <Badge
-                                    variant="destructive"
-                                    className="text-xs"
-                                  >
-                                    {label}
-                                  </Badge>
-                                );
-                              }
-
-                              return <Badge variant="outline">{label}</Badge>;
-                            })()}
-                          </TableCell>
-                          <TableCell>
-                            {(() => {
-                              if (prospect.lastContactDate) {
-                                try {
-                                  return format(
-                                    prospect.lastContactDate.toDate(),
-                                    "MMM dd, yyyy"
-                                  );
-                                } catch (error) {
-                                  return "Invalid Date";
-                                }
-                              }
-                              return "-";
-                            })()}
-                          </TableCell>
-                          <TableCell>
-                            {prospect.nextFollowUpDate
-                              ? format(
-                                  prospect.nextFollowUpDate.toDate(),
-                                  "MMM dd, yyyy"
-                                )
-                              : "-"}
-=======
                             {prospect.lastContactDate ? (
                               <div className="flex items-center gap-1">
                                 <Calendar className="h-3 w-3" />
@@ -757,12 +707,15 @@ export default function TelemarketingProspectsPage() {
                                 Never contacted
                               </span>
                             )}
->>>>>>> 96ac4a3188e3be6678281adbc0afdbdaed8a490e
                           </TableCell>
                           <TableCell>
                             <div className="flex flex-wrap gap-1">
                               {prospect.tags?.slice(0, 2).map((tag, index) => (
-                                <Badge key={index} variant="outline" className="text-xs">
+                                <Badge
+                                  key={index}
+                                  variant="outline"
+                                  className="text-xs"
+                                >
                                   {tag}
                                 </Badge>
                               ))}
@@ -788,17 +741,12 @@ export default function TelemarketingProspectsPage() {
                                   Edit
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-<<<<<<< HEAD
-                                  className="text-destructive"
-                                  onClick={() => deleteProspect(prospect.id!)}
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" />
-=======
-                                  onClick={() => handleDeleteProspect(prospect.id!)}
+                                  onClick={() =>
+                                    handleDeleteProspect(prospect.id!)
+                                  }
                                   className="text-red-600"
                                 >
                                   <Trash2 className="h-4 w-4 mr-2" />
->>>>>>> 96ac4a3188e3be6678281adbc0afdbdaed8a490e
                                   Delete
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
@@ -825,7 +773,10 @@ export default function TelemarketingProspectsPage() {
                       </SelectTrigger>
                       <SelectContent side="top">
                         {[10, 20, 30, 40, 50].map((pageSize) => (
-                          <SelectItem key={pageSize} value={pageSize.toString()}>
+                          <SelectItem
+                            key={pageSize}
+                            value={pageSize.toString()}
+                          >
                             {pageSize}
                           </SelectItem>
                         ))}
@@ -853,7 +804,9 @@ export default function TelemarketingProspectsPage() {
                         <PaginationItem>
                           <PaginationNext
                             onClick={() =>
-                              setCurrentPage(Math.min(totalPages, currentPage + 1))
+                              setCurrentPage(
+                                Math.min(totalPages, currentPage + 1)
+                              )
                             }
                             className={
                               currentPage === totalPages
@@ -871,19 +824,16 @@ export default function TelemarketingProspectsPage() {
           </Card>
         </div>
       </SidebarInset>
-
       {/* Modals */}
       <ImportExcelModal
         open={isImportModalOpen}
         onOpenChange={setIsImportModalOpen}
         onImport={importProspects}
-      />      <AddEditProspectModal
+      />{" "}
+      <AddEditProspectModal
         open={isAddEditModalOpen}
         onOpenChange={setIsAddEditModalOpen}
-        onSave={editingProspect ?
-          (data) => updateProspect(editingProspect.id, data) :
-          addProspect
-        }
+        onSave={handleSaveProspect}
         prospect={editingProspect}
       />
     </SidebarProvider>
