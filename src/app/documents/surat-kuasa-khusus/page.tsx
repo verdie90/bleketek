@@ -100,6 +100,9 @@ import {
   doc,
   updateDoc,
   deleteDoc,
+  query,
+  where,
+  orderBy,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { toast } from "sonner";
@@ -173,8 +176,7 @@ const STEPS = [
   { id: 2, title: "Pilih Hutang" },
   { id: 3, title: "Pengaturan Dokumen" },
   { id: 4, title: "Template & Variabel" },
-  { id: 5, title: "Review" },
-  { id: 6, title: "Generate" },
+  { id: 5, title: "Generate" },
 ];
 
 export default function SuratKuasaKhususPage() {
@@ -219,6 +221,31 @@ export default function SuratKuasaKhususPage() {
   const [showClientDropdown, setShowClientDropdown] = useState<boolean>(false);
   const [filteredClients, setFilteredClients] = useState<Client[]>([]);
   const [selectedClientIndex, setSelectedClientIndex] = useState<number>(-1);
+
+  // Document History Management
+  const [documentHistory, setDocumentHistory] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historySearchTerm, setHistorySearchTerm] = useState<string>("");
+  const [historyFilter, setHistoryFilter] = useState<
+    "all" | "today" | "week" | "month"
+  >("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [sortBy, setSortBy] = useState<"date" | "client" | "document">("date");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [selectedDocumentForView, setSelectedDocumentForView] =
+    useState<any>(null);
+  const [isDocumentViewDialogOpen, setIsDocumentViewDialogOpen] =
+    useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [documentToDelete, setDocumentToDelete] = useState<any>(null);
+
+  // Additional states for history management
+  const [searchTerm, setSearchTerm] = useState<string>("");
+  const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({});
+  const [totalPages, setTotalPages] = useState(1);
+  const [previewDocument, setPreviewDocument] = useState<any>(null);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
 
   // Utility function to convert month to Roman numerals
   const toRomanNumeral = (month: number): string => {
@@ -469,6 +496,93 @@ export default function SuratKuasaKhususPage() {
     fetchTemplates();
   }, []);
 
+  // Fetch document history from Firestore
+  useEffect(() => {
+    const fetchDocumentHistory = async () => {
+      try {
+        console.log("Fetching document history...");
+        setHistoryLoading(true);
+
+        // Base query - fetch all documents first for client-side filtering
+        const q = query(
+          collection(db, "generated_documents"),
+          orderBy("createdAt", "desc")
+        );
+
+        const snapshot = await getDocs(q);
+        console.log("Raw documents fetched:", snapshot.size);
+
+        let allDocuments = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toDate?.() || new Date(),
+        })) as any[];
+
+        console.log("All documents:", allDocuments);
+
+        // Filter by type (optional - remove if you want all document types)
+        allDocuments = allDocuments.filter(
+          (doc) => doc.type === "surat_kuasa_khusus" || !doc.type
+        );
+
+        // Apply date range filter
+        if (dateRange.from) {
+          allDocuments = allDocuments.filter(
+            (doc) => doc.createdAt >= dateRange.from!
+          );
+        }
+
+        if (dateRange.to) {
+          const toDate = new Date(dateRange.to);
+          toDate.setHours(23, 59, 59, 999);
+          allDocuments = allDocuments.filter((doc) => doc.createdAt <= toDate);
+        }
+
+        // Apply search filter
+        if (searchTerm) {
+          allDocuments = allDocuments.filter(
+            (doc) =>
+              doc.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              doc.content?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              doc.clientName?.toLowerCase().includes(searchTerm.toLowerCase())
+          );
+        }
+
+        // Apply sorting
+        allDocuments.sort((a, b) => {
+          const aValue = sortBy === "date" ? a.createdAt : a.title || "";
+          const bValue = sortBy === "date" ? b.createdAt : b.title || "";
+
+          if (sortOrder === "asc") {
+            return aValue > bValue ? 1 : -1;
+          } else {
+            return aValue < bValue ? 1 : -1;
+          }
+        });
+
+        console.log("Filtered and sorted documents:", allDocuments.length);
+
+        // Apply pagination
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage;
+        const paginatedDocs = allDocuments.slice(startIndex, endIndex);
+
+        setDocumentHistory(paginatedDocs);
+        setHistory(allDocuments); // Store all documents for reference
+        setTotalPages(Math.ceil(allDocuments.length / itemsPerPage));
+
+        console.log("Final paginated documents:", paginatedDocs);
+      } catch (error) {
+        console.error("Error fetching document history:", error);
+        toast.error("Gagal memuat riwayat dokumen");
+      } finally {
+        setHistoryLoading(false);
+      }
+    };
+
+    fetchDocumentHistory();
+  }, [dateRange, searchTerm, sortBy, sortOrder, currentPage, itemsPerPage]);
+
   // Set overall loading state
   useEffect(() => {
     setIsLoading(clientsLoading || templatesLoading);
@@ -503,15 +617,114 @@ export default function SuratKuasaKhususPage() {
     setSelectedClientIndex(-1);
   }, [clients, clientSearchTerm]);
 
-  // Update search term when client is selected
+  // Auto advance ke step 2 setelah client dipilih jika di step 1
   useEffect(() => {
     if (selectedClientId && selectedClient) {
       setClientSearchTerm(
         `${selectedClient.personalData.namaLengkap} (${selectedClient.personalData.nik})`
       );
       setShowClientDropdown(false);
+
+      // Auto advance ke step 2 setelah client dipilih jika di step 1
+      if (step === 1) {
+        toast.success(
+          `Klien ${selectedClient.personalData.namaLengkap} dipilih`
+        );
+        setTimeout(() => setStep(2), 500); // Delay sedikit untuk UX yang smooth
+      }
     }
-  }, [selectedClientId, selectedClient]);
+  }, [selectedClientId, selectedClient, step]);
+
+  // Auto advance ke step 3 setelah debt dipilih jika di step 2
+  useEffect(() => {
+    if (selectedDebtId && selectedClient && step === 2) {
+      const debt = selectedClient.debtData.debts.find(
+        (d) => d.id === selectedDebtId
+      );
+      if (debt) {
+        toast.success(
+          `Hutang ${debt.jenisHutang} - ${debt.bankProvider} dipilih`
+        );
+        setTimeout(() => setStep(3), 500); // Delay sedikit untuk UX yang smooth
+      }
+    }
+  }, [selectedDebtId, selectedClient, step]);
+
+  // Auto advance ke step 4 setelah document number ter-generate
+  useEffect(() => {
+    if (documentNumber && step === 3) {
+      setTimeout(() => {
+        toast.success(`Nomor dokumen ${documentNumber} berhasil dibuat`);
+        setStep(4);
+      }, 1000); // Delay sedikit untuk UX yang smooth
+    }
+  }, [documentNumber, step]);
+
+  // Keyboard shortcuts untuk navigasi
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Jangan handle jika sedang mengetik di input field
+      if (
+        ["INPUT", "TEXTAREA", "SELECT"].includes(
+          (event.target as HTMLElement)?.tagName
+        )
+      ) {
+        return;
+      }
+
+      if (event.ctrlKey || event.metaKey) {
+        switch (event.key) {
+          case "ArrowLeft":
+            event.preventDefault();
+            if (step > 1) setStep(step - 1);
+            break;
+          case "ArrowRight":
+            event.preventDefault();
+            const canNext =
+              step < STEPS.length &&
+              (() => {
+                switch (step + 1) {
+                  case 2:
+                    return !!selectedClientId;
+                  case 3:
+                    return !!selectedClientId && !!selectedDebtId;
+                  case 4:
+                    return (
+                      !!selectedClientId && !!selectedDebtId && !!documentNumber
+                    );
+                  case 5:
+                    return (
+                      !!selectedClientId &&
+                      !!selectedDebtId &&
+                      !!documentNumber &&
+                      !!selectedTemplateId
+                    );
+                  case 6:
+                    return (
+                      !!selectedClientId &&
+                      !!selectedDebtId &&
+                      !!documentNumber &&
+                      !!selectedTemplateId
+                    );
+                  default:
+                    return true;
+                }
+              })();
+            if (canNext) setStep(step + 1);
+            break;
+        }
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [
+    step,
+    selectedClientId,
+    selectedDebtId,
+    documentNumber,
+    selectedTemplateId,
+  ]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -643,6 +856,323 @@ export default function SuratKuasaKhususPage() {
     toast.success(`Template "${template.name}" dipilih`);
   };
 
+  // Document History Management Functions
+  const handleDeleteDocument = async (documentId: string) => {
+    try {
+      await deleteDoc(doc(db, "generated_documents", documentId));
+      setDocumentHistory((prev) => prev.filter((doc) => doc.id !== documentId));
+      setHistory((prev) => prev.filter((doc) => doc.id !== documentId));
+      toast.success("Dokumen berhasil dihapus");
+      setIsDeleteConfirmOpen(false);
+      setDocumentToDelete(null);
+    } catch (error) {
+      console.error("Error deleting document:", error);
+      toast.error("Gagal menghapus dokumen");
+    }
+  };
+
+  const handleDuplicateDocument = async (document: any) => {
+    try {
+      const duplicatedDoc = {
+        ...document,
+        title: `${document.title} (Copy)`,
+        createdAt: serverTimestamp(),
+      };
+      delete duplicatedDoc.id; // Remove the original ID
+
+      await addDoc(collection(db, "generated_documents"), duplicatedDoc);
+      toast.success("Dokumen berhasil diduplikasi");
+    } catch (error) {
+      console.error("Error duplicating document:", error);
+      toast.error("Gagal menduplikasi dokumen");
+    }
+  };
+
+  const handleDownloadDocument = (document: any) => {
+    try {
+      const blob = new Blob([document.content || ""], { type: "text/html" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${document.title || "document"}.html`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success("Dokumen berhasil diunduh");
+    } catch (error) {
+      console.error("Error downloading document:", error);
+      toast.error("Gagal mengunduh dokumen");
+    }
+  };
+
+  const handlePreviewDocument = (document: any) => {
+    setPreviewDocument(document);
+    setShowPreviewModal(true);
+  };
+
+  const handleViewDocument = (document: any) => {
+    setSelectedDocumentForView(document);
+    setIsDocumentViewDialogOpen(true);
+  };
+
+  const handleDownloadExistingPDF = async (document: any) => {
+    try {
+      setIsDownloading(true);
+      toast.info("Sedang membuat PDF...");
+
+      if (!document.content || !document.content.trim()) {
+        throw new Error("Konten dokumen kosong atau tidak valid");
+      }
+
+      // Create a temporary container for better PDF rendering
+      const tempContainer = document.createElement("div");
+      tempContainer.style.position = "absolute";
+      tempContainer.style.left = "-9999px";
+      tempContainer.style.top = "-9999px";
+      tempContainer.style.width = "794px";
+      tempContainer.style.minHeight = "1123px";
+      tempContainer.style.maxWidth = "794px";
+      tempContainer.style.padding = "40px";
+      tempContainer.style.fontFamily = "Arial, sans-serif";
+      tempContainer.style.fontSize = "14px";
+      tempContainer.style.lineHeight = "1.6";
+      tempContainer.style.color = "#000";
+      tempContainer.style.backgroundColor = "#fff";
+      tempContainer.style.boxSizing = "border-box";
+
+      const styledContent = `
+        <style>
+          @page { 
+            size: A4; 
+            margin: 20mm; 
+          }
+          * { 
+            margin: 0; 
+            padding: 0; 
+            box-sizing: border-box; 
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          body { 
+            font-family: 'Arial', 'Helvetica', sans-serif; 
+            font-size: 14px; 
+            line-height: 1.6; 
+            color: #000 !important; 
+            background: #fff !important;
+            width: 100%;
+            max-width: 794px;
+            margin: 0 auto;
+          }
+          h1, h2, h3 { 
+            text-align: center; 
+            margin-bottom: 20px; 
+            font-weight: bold; 
+            page-break-after: avoid;
+            color: #000 !important;
+          }
+          h1 { font-size: 20px; margin-bottom: 15px; }
+          h2 { font-size: 18px; margin-bottom: 15px; }
+          h3 { font-size: 16px; margin-bottom: 15px; }
+          p { 
+            margin-bottom: 15px; 
+            text-align: justify; 
+            page-break-inside: avoid;
+            orphans: 2;
+            widows: 2;
+            color: #000 !important;
+          }
+          table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-bottom: 20px; 
+            page-break-inside: avoid;
+          }
+          td { 
+            padding: 8px 4px; 
+            vertical-align: top; 
+            border: none; 
+            line-height: 1.4;
+            color: #000 !important;
+          }
+          strong, b { 
+            font-weight: bold; 
+            color: #000 !important;
+          }
+          .text-center { text-align: center; }
+          .text-right { text-align: right; }
+          .text-left { text-align: left; }
+          .mb-30 { margin-bottom: 30px; }
+          .mb-20 { margin-bottom: 20px; }
+          .mt-30 { margin-top: 30px; }
+          .page-break { page-break-before: always; }
+          .no-break { page-break-inside: avoid; }
+          
+          /* Force black text for all elements */
+          * {
+            color: #000 !important;
+          }
+        </style>
+        <div style="width: 100%; max-width: 794px; margin: 0 auto; padding: 20px; background: #fff;">
+          ${document.content}
+        </div>
+      `;
+
+      tempContainer.innerHTML = styledContent;
+      document.body.appendChild(tempContainer);
+
+      // Wait longer for content to fully load
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      console.log("Starting PDF conversion for existing document...");
+
+      const html2canvas = (await import("html2canvas")).default;
+      const canvas = await html2canvas(tempContainer, {
+        useCORS: true,
+        allowTaint: false,
+        background: "#ffffff",
+        logging: false,
+        width: 794,
+        height: tempContainer.scrollHeight,
+      });
+
+      console.log("Canvas created:", canvas.width, "x", canvas.height);
+
+      document.body.removeChild(tempContainer);
+
+      if (!canvas || canvas.width === 0 || canvas.height === 0) {
+        throw new Error("Gagal membuat canvas dari konten dokumen");
+      }
+
+      const doc = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      });
+
+      const imgData = canvas.toDataURL("image/jpeg", 0.95);
+      const pdfWidth = 210;
+      const pdfHeight = 297;
+      const imgWidth = pdfWidth;
+      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+
+      let yPosition = 0;
+
+      doc.addImage(imgData, "JPEG", 0, yPosition, imgWidth, imgHeight);
+
+      let remainingHeight = imgHeight;
+      while (remainingHeight > pdfHeight) {
+        doc.addPage();
+        yPosition -= pdfHeight;
+        doc.addImage(imgData, "JPEG", 0, yPosition, imgWidth, imgHeight);
+        remainingHeight -= pdfHeight;
+      }
+
+      const timestamp = new Date().toISOString().slice(0, 10);
+      const timeStr = new Date().toTimeString().slice(0, 5).replace(":", "");
+
+      // Handle potential missing properties with fallbacks
+      const clientName =
+        document.clientName || document.title || "unknown-client";
+      const docNumber = document.documentNumber || document.id || "unknown-doc";
+
+      const sanitizedClientName = clientName
+        .replace(/[^a-zA-Z0-9\s]/g, "")
+        .replace(/\s+/g, "-")
+        .toLowerCase();
+      const sanitizedDocNumber = docNumber.replace(/[^a-zA-Z0-9]/g, "-");
+
+      const fileName = `surat-kuasa-khusus-${sanitizedClientName}-${sanitizedDocNumber}-${timestamp}-${timeStr}.pdf`;
+
+      console.log("Saving existing document PDF as:", fileName);
+      doc.save(fileName);
+
+      toast.success(`PDF berhasil didownload: ${fileName}`);
+    } catch (error) {
+      console.error("Error generating PDF for existing document:", error);
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Terjadi kesalahan tidak diketahui";
+      toast.error(`Gagal membuat PDF: ${errorMessage}`);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  // Filter and sort document history
+  const getFilteredAndSortedHistory = () => {
+    let filtered = documentHistory;
+
+    // Apply date filter
+    if (historyFilter !== "all") {
+      const now = new Date();
+      const filterDate = new Date();
+
+      switch (historyFilter) {
+        case "today":
+          filterDate.setHours(0, 0, 0, 0);
+          break;
+        case "week":
+          filterDate.setDate(now.getDate() - 7);
+          break;
+        case "month":
+          filterDate.setDate(now.getDate() - 30);
+          break;
+      }
+
+      filtered = filtered.filter((doc) => {
+        const docDate = new Date(doc.createdAt);
+        return docDate >= filterDate;
+      });
+    }
+
+    // Apply search filter
+    if (historySearchTerm.trim()) {
+      const searchLower = historySearchTerm.toLowerCase();
+      filtered = filtered.filter(
+        (doc) =>
+          doc.clientName.toLowerCase().includes(searchLower) ||
+          doc.documentNumber.toLowerCase().includes(searchLower) ||
+          (doc.content || "").toLowerCase().includes(searchLower)
+      );
+    }
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let aValue, bValue;
+
+      switch (sortBy) {
+        case "client":
+          aValue = a.clientName;
+          bValue = b.clientName;
+          break;
+        case "document":
+          aValue = a.documentNumber;
+          bValue = b.documentNumber;
+          break;
+        case "date":
+        default:
+          aValue = new Date(a.createdAt);
+          bValue = new Date(b.createdAt);
+          break;
+      }
+
+      if (aValue < bValue) return sortOrder === "asc" ? -1 : 1;
+      if (aValue > bValue) return sortOrder === "asc" ? 1 : -1;
+      return 0;
+    });
+
+    return filtered;
+  };
+
+  // Pagination
+  const filteredHistory = getFilteredAndSortedHistory();
+  const paginatedHistory = filteredHistory.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
   // Filter templates based on search term
   const filteredTemplates = templates.filter((template) => {
     if (!templateSearchTerm.trim()) return true;
@@ -753,10 +1283,28 @@ export default function SuratKuasaKhususPage() {
     return processedContent;
   };
 
-  // Step 1: Pilih Klien
+  // Step 1: Pilih Klien dengan tips
   const renderStep1 = () => (
     <div className="space-y-4">
-      <Label htmlFor="client">Pilih Klien</Label>
+      <div className="flex items-center justify-between">
+        <Label htmlFor="client">Pilih Klien</Label>
+        <div className="text-sm text-gray-500 dark:text-gray-400">
+          {clients.length} klien tersedia
+        </div>
+      </div>
+
+      {/* Tips untuk Step 1 */}
+      <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+        <div className="flex items-start gap-2">
+          <div className="w-4 h-4 text-blue-500 mt-0.5">💡</div>
+          <div className="text-sm text-blue-700 dark:text-blue-300">
+            <strong>Tips:</strong> Ketik nama lengkap atau NIK klien untuk
+            mencari dengan cepat. Gunakan tanda panah ↑↓ untuk navigasi dan
+            Enter untuk memilih.
+          </div>
+        </div>
+      </div>
+
       {clientsLoading ? (
         <div className="space-y-2">
           <div className="h-10 bg-gray-200 dark:bg-gray-700 animate-pulse rounded"></div>
@@ -764,6 +1312,20 @@ export default function SuratKuasaKhususPage() {
             <div className="h-4 bg-gray-200 dark:bg-gray-700 animate-pulse rounded w-3/4"></div>
             <div className="h-4 bg-gray-200 dark:bg-gray-700 animate-pulse rounded w-1/2"></div>
           </div>
+        </div>
+      ) : clients.length === 0 ? (
+        <div className="text-center py-8 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
+          <User className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+          <p className="text-gray-500 dark:text-gray-400 mb-2">
+            Belum ada data klien
+          </p>
+          <Button
+            size="sm"
+            onClick={() => window.open("/clients/data", "_blank")}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Tambah Klien Baru
+          </Button>
         </div>
       ) : (
         <>
@@ -857,59 +1419,119 @@ export default function SuratKuasaKhususPage() {
     </div>
   );
 
-  // Step 2: Pilih Hutang
+  // Step 2: Pilih Hutang dengan tips
   const renderStep2 = () => {
     if (!selectedClient) {
       return (
-        <p className="text-red-500 dark:text-red-400">
-          Pilih klien terlebih dahulu
-        </p>
+        <div className="text-center py-8">
+          <User className="h-8 w-8 text-red-400 mx-auto mb-2" />
+          <p className="text-red-500 dark:text-red-400 mb-2">
+            Pilih klien terlebih dahulu
+          </p>
+          <Button variant="outline" onClick={() => setStep(1)}>
+            Kembali ke Step 1
+          </Button>
+        </div>
       );
     }
 
+    const debts = selectedClient.debtData?.debts || [];
+
     return (
       <div className="space-y-4">
-        <Label htmlFor="debt">Pilih Hutang</Label>
-        <Select value={selectedDebtId} onValueChange={setSelectedDebtId}>
-          <SelectTrigger>
-            <SelectValue placeholder="Pilih hutang" />
-          </SelectTrigger>
-          <SelectContent>
-            {selectedClient.debtData.debts.map((debt) => (
-              <SelectItem key={debt.id} value={debt.id}>
-                {debt.jenisHutang} - {debt.bankProvider} (Rp {debt.outstanding})
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center justify-between">
+          <Label htmlFor="debt">Pilih Hutang</Label>
+          <div className="text-sm text-gray-500 dark:text-gray-400">
+            {debts.length} hutang tersedia
+          </div>
+        </div>
+
+        {/* Tips untuk Step 2 */}
+        <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+          <div className="flex items-start gap-2">
+            <div className="w-4 h-4 text-blue-500 mt-0.5">💡</div>
+            <div className="text-sm text-blue-700 dark:text-blue-300">
+              <strong>Tips:</strong> Pilih hutang yang akan dijadikan dasar
+              untuk pembuatan surat kuasa. Data hutang ini akan otomatis
+              dimasukkan ke dalam dokumen.
+            </div>
+          </div>
+        </div>
+
+        {debts.length === 0 ? (
+          <div className="text-center py-8 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
+            <CreditCard className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+            <p className="text-gray-500 dark:text-gray-400 mb-2">
+              Klien ini belum memiliki data hutang
+            </p>
+            <Button
+              size="sm"
+              onClick={() =>
+                window.open(`/clients/data?edit=${selectedClient.id}`, "_blank")
+              }
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Tambah Data Hutang
+            </Button>
+          </div>
+        ) : (
+          <Select value={selectedDebtId} onValueChange={setSelectedDebtId}>
+            <SelectTrigger>
+              <SelectValue placeholder="Pilih hutang" />
+            </SelectTrigger>
+            <SelectContent>
+              {debts.map((debt) => (
+                <SelectItem key={debt.id} value={debt.id}>
+                  {debt.jenisHutang} - {debt.bankProvider} (Rp{" "}
+                  {debt.outstanding})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
         {selectedDebt && (
           <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-800 rounded">
             <h4 className="font-medium dark:text-gray-200">Hutang Dipilih:</h4>
-            <p className="dark:text-gray-300">
-              <strong>Jenis:</strong> {selectedDebt.jenisHutang}
-            </p>
-            <p className="dark:text-gray-300">
-              <strong>Bank/Provider:</strong> {selectedDebt.bankProvider}
-            </p>
-            <p className="dark:text-gray-300">
-              <strong>Nomor:</strong> {selectedDebt.nomorKartuKontrak}
-            </p>
-            <p className="dark:text-gray-300">
-              <strong>Outstanding:</strong> Rp {selectedDebt.outstanding}
-            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2 text-sm">
+              <p className="dark:text-gray-300">
+                <strong>Jenis:</strong> {selectedDebt.jenisHutang}
+              </p>
+              <p className="dark:text-gray-300">
+                <strong>Bank/Provider:</strong> {selectedDebt.bankProvider}
+              </p>
+              <p className="dark:text-gray-300">
+                <strong>Nomor:</strong> {selectedDebt.nomorKartuKontrak}
+              </p>
+              <p className="dark:text-gray-300">
+                <strong>Outstanding:</strong> Rp {selectedDebt.outstanding}
+              </p>
+            </div>
           </div>
         )}
       </div>
     );
   };
 
-  // Step 3: Pengaturan Dokumen
+  // Step 3: Pengaturan Dokumen dengan tips
   const renderStep3 = () => {
     return (
       <div className="space-y-6">
         <h3 className="text-lg font-medium dark:text-gray-200">
           Pengaturan Nomor Surat
         </h3>
+
+        {/* Tips untuk Step 3 */}
+        <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+          <div className="flex items-start gap-2">
+            <div className="w-4 h-4 text-blue-500 mt-0.5">💡</div>
+            <div className="text-sm text-blue-700 dark:text-blue-300">
+              <strong>Tips:</strong> Nomor surat akan dibuat otomatis dengan
+              format standar. Anda dapat mengubah huruf kustom sesuai dengan
+              jenis dokumen yang akan dibuat.
+            </div>
+          </div>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-4">
@@ -932,6 +1554,24 @@ export default function SuratKuasaKhususPage() {
                   >
                     PINJOL (Pinjaman Online)
                   </SelectItem>
+                  <SelectItem
+                    value="MORTGAGE"
+                    className="dark:text-gray-200 dark:hover:bg-gray-700"
+                  >
+                    MORTGAGE (Kredit Rumah)
+                  </SelectItem>
+                  <SelectItem
+                    value="AUTO"
+                    className="dark:text-gray-200 dark:hover:bg-gray-700"
+                  >
+                    AUTO (Kredit Kendaraan)
+                  </SelectItem>
+                  <SelectItem
+                    value="UMUM"
+                    className="dark:text-gray-200 dark:hover:bg-gray-700"
+                  >
+                    UMUM (Keperluan Umum)
+                  </SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -946,24 +1586,39 @@ export default function SuratKuasaKhususPage() {
                 Preview Nomor Surat
               </h4>
               <div className="space-y-2">
-                <p className="font-mono text-lg dark:text-gray-300">
+                <p className="font-mono text-lg dark:text-gray-300 break-all">
                   {documentNumber}
                 </p>
                 <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
-                  <p>
+                  <p className="font-medium">
                     Format: no_surat/DOCS/huruf_kustom/SKK/bulan_romawi/tahun
                   </p>
-                  <p>• no_surat: Nomor urut otomatis</p>
-                  <p>• DOCS: Kode dokumen</p>
-                  <p>• {customLetter}: Huruf kustom Anda</p>
-                  <p>• SKK: Surat Kuasa Khusus</p>
-                  <p>• Bulan dalam angka Romawi</p>
-                  <p>• Tahun sekarang</p>
+                  <div className="space-y-0.5 pl-2">
+                    <p>• no_surat: Nomor urut otomatis</p>
+                    <p>• DOCS: Kode dokumen</p>
+                    <p>• {customLetter}: Huruf kustom Anda</p>
+                    <p>• SKK: Surat Kuasa Khusus</p>
+                    <p>• Bulan dalam angka Romawi</p>
+                    <p>• Tahun sekarang</p>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
+
+        {/* Status indicator untuk document number generation */}
+        {documentNumber && (
+          <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 text-green-500">✅</div>
+              <p className="text-sm text-green-700 dark:text-green-300 font-medium">
+                Nomor dokumen berhasil dibuat! Siap melanjutkan ke pemilihan
+                template.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -1673,23 +2328,6 @@ export default function SuratKuasaKhususPage() {
           </div>
         )}
 
-        {/* Template Preview */}
-        {selectedTemplate && (
-          <div className="space-y-4">
-            <h4 className="font-medium dark:text-gray-200">Preview Dokumen</h4>
-            <div className="border rounded-lg p-4 bg-white dark:bg-gray-900 dark:border-gray-700">
-              <div
-                className="dark:text-gray-200"
-                dangerouslySetInnerHTML={{
-                  __html: processTemplate(
-                    editorContent || selectedTemplate.content
-                  ),
-                }}
-              />
-            </div>
-          </div>
-        )}
-
         {/* Template View Dialog */}
         <Dialog
           open={isTemplateViewDialogOpen}
@@ -1742,93 +2380,8 @@ export default function SuratKuasaKhususPage() {
     );
   };
 
-  // Step 5: Review & Konfirmasi (previously step 4)
+  // Step 5: Generate dan Simpan (previously step 5)
   const renderStep5 = () => {
-    if (!selectedClient || !selectedDebt || !selectedTemplateId) {
-      return (
-        <p className="text-red-500 dark:text-red-400">
-          Lengkapi data terlebih dahulu
-        </p>
-      );
-    }
-
-    const selectedTemplate = templates.find((t) => t.id === selectedTemplateId);
-
-    return (
-      <div className="space-y-6">
-        <h3 className="text-lg font-medium dark:text-gray-200">Review Data</h3>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="p-4 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700">
-            <h4 className="font-medium mb-3 dark:text-gray-200">Nomor Surat</h4>
-            <p className="font-mono text-sm dark:text-gray-300">
-              {documentNumber}
-            </p>
-          </div>
-
-          <div className="p-4 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700">
-            <h4 className="font-medium mb-3 dark:text-gray-200">
-              Informasi Klien
-            </h4>
-            <div className="space-y-2 text-sm">
-              <p className="dark:text-gray-300">
-                <strong>Nama:</strong> {selectedClient.personalData.namaLengkap}
-              </p>
-              <p className="dark:text-gray-300">
-                <strong>NIK:</strong> {selectedClient.personalData.nik}
-              </p>
-            </div>
-          </div>
-
-          <div className="p-4 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700">
-            <h4 className="font-medium mb-3 dark:text-gray-200">
-              Informasi Hutang
-            </h4>
-            <div className="space-y-2 text-sm">
-              <p className="dark:text-gray-300">
-                <strong>Jenis:</strong> {selectedDebt.jenisHutang}
-              </p>
-              <p className="dark:text-gray-300">
-                <strong>Bank/Provider:</strong> {selectedDebt.bankProvider}
-              </p>
-              <p className="dark:text-gray-300">
-                <strong>Nomor:</strong> {selectedDebt.nomorKartuKontrak}
-              </p>
-              <p className="dark:text-gray-300">
-                <strong>Outstanding:</strong> Rp {selectedDebt.outstanding}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="p-4 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700">
-          <h4 className="font-medium mb-3 dark:text-gray-200">
-            Template Dipilih
-          </h4>
-          <p className="text-sm dark:text-gray-300">{selectedTemplate?.name}</p>
-        </div>
-
-        <div className="space-y-4">
-          <h4 className="font-medium dark:text-gray-200">
-            Preview Final Dokumen
-          </h4>
-          <div className="border rounded-lg p-6 bg-white dark:bg-gray-900 dark:border-gray-700 max-h-96 overflow-y-auto">
-            <div
-              className="prose prose-sm max-w-none dark:prose-invert dark:text-gray-200"
-              dangerouslySetInnerHTML={{
-                __html: processTemplate(
-                  editorContent || selectedTemplate?.content || ""
-                ),
-              }}
-            />
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // Step 6: Generate dan Simpan (previously step 5)
-  const renderStep6 = () => {
     // State hooks moved to top level component
     // const [isGenerating, setIsGenerating] = useState(false);
     // const [isDownloading, setIsDownloading] = useState(false);
@@ -1880,7 +2433,7 @@ export default function SuratKuasaKhususPage() {
       }
     };
 
-    const handleDownloadPDF = () => {
+    const handleDownloadPDF = async () => {
       if (!selectedClient || !selectedDebt) {
         toast.error("Data tidak lengkap");
         return;
@@ -1888,29 +2441,197 @@ export default function SuratKuasaKhususPage() {
 
       try {
         setIsDownloading(true);
+        toast.info("Sedang membuat PDF...");
+
+        // Get final content with variables replaced
         const finalContent = processTemplate(
           editorContent ||
             templates.find((t) => t.id === selectedTemplateId)?.content ||
             ""
         );
 
-        const doc = new jsPDF();
+        if (!finalContent.trim()) {
+          throw new Error("Konten dokumen kosong");
+        }
 
-        // Convert HTML to text for PDF (simple implementation)
-        const tempDiv = document.createElement("div");
-        tempDiv.innerHTML = finalContent;
-        const textContent = tempDiv.textContent || tempDiv.innerText || "";
+        // Create a temporary container for better PDF rendering
+        const tempContainer = document.createElement("div");
+        tempContainer.style.position = "absolute";
+        tempContainer.style.left = "-9999px";
+        tempContainer.style.top = "-9999px";
+        tempContainer.style.width = "794px"; // A4 width at 96dpi
+        tempContainer.style.minHeight = "1123px"; // A4 height at 96dpi
+        tempContainer.style.maxWidth = "794px";
+        tempContainer.style.padding = "40px";
+        tempContainer.style.fontFamily = "Arial, sans-serif";
+        tempContainer.style.fontSize = "14px";
+        tempContainer.style.lineHeight = "1.6";
+        tempContainer.style.color = "#000";
+        tempContainer.style.backgroundColor = "#fff";
+        tempContainer.style.boxSizing = "border-box";
 
-        const lines = doc.splitTextToSize(textContent, 180);
-        doc.text(lines, 15, 20);
+        // Enhanced CSS for better PDF formatting
+        const styledContent = `
+          <style>
+            @page { 
+              size: A4; 
+              margin: 20mm; 
+            }
+            * { 
+              margin: 0; 
+              padding: 0; 
+              box-sizing: border-box; 
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            body { 
+              font-family: 'Arial', 'Helvetica', sans-serif; 
+              font-size: 14px; 
+              line-height: 1.6; 
+              color: #000 !important; 
+              background: #fff !important;
+              width: 100%;
+              max-width: 794px;
+              margin: 0 auto;
+            }
+            h1, h2, h3 { 
+              text-align: center; 
+              margin-bottom: 20px; 
+              font-weight: bold; 
+              page-break-after: avoid;
+              color: #000 !important;
+            }
+            h1 { font-size: 20px; margin-bottom: 15px; }
+            h2 { font-size: 18px; margin-bottom: 15px; }
+            h3 { font-size: 16px; margin-bottom: 15px; }
+            p { 
+              margin-bottom: 15px; 
+              text-align: justify; 
+              page-break-inside: avoid;
+              orphans: 2;
+              widows: 2;
+              color: #000 !important;
+            }
+            table { 
+              width: 100%; 
+              border-collapse: collapse; 
+              margin-bottom: 20px; 
+              page-break-inside: avoid;
+            }
+            td { 
+              padding: 8px 4px; 
+              vertical-align: top; 
+              border: none; 
+              line-height: 1.4;
+              color: #000 !important;
+            }
+            strong, b { 
+              font-weight: bold; 
+              color: #000 !important;
+            }
+            .text-center { text-align: center; }
+            .text-right { text-align: right; }
+            .text-left { text-align: left; }
+            .mb-30 { margin-bottom: 30px; }
+            .mb-20 { margin-bottom: 20px; }
+            .mt-30 { margin-top: 30px; }
+            .page-break { page-break-before: always; }
+            .no-break { page-break-inside: avoid; }
+            
+            /* Force black text for all elements */
+            * {
+              color: #000 !important;
+            }
+          </style>
+          <div style="width: 100%; max-width: 794px; margin: 0 auto; padding: 20px; background: #fff;">
+            ${finalContent}
+          </div>
+        `;
 
-        doc.save(
-          `surat-kuasa-khusus-${selectedClient.personalData.namaLengkap}.pdf`
-        );
-        toast.success("PDF berhasil didownload");
+        tempContainer.innerHTML = styledContent;
+        document.body.appendChild(tempContainer);
+
+        // Wait longer for fonts and content to fully load
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        console.log("Starting PDF conversion...");
+
+        // Import html2canvas dynamically
+        const html2canvas = (await import("html2canvas")).default;
+
+        // Convert HTML to canvas with optimized settings
+        const canvas = await html2canvas(tempContainer, {
+          useCORS: true,
+          allowTaint: false,
+          background: "#ffffff",
+          logging: false,
+          width: 794,
+          height: tempContainer.scrollHeight,
+        });
+
+        console.log("Canvas created:", canvas.width, "x", canvas.height);
+
+        // Remove temporary container
+        document.body.removeChild(tempContainer);
+
+        // Validate canvas
+        if (!canvas || canvas.width === 0 || canvas.height === 0) {
+          throw new Error("Gagal membuat canvas dari konten HTML");
+        }
+
+        // Create PDF with proper dimensions
+        const doc = new jsPDF({
+          orientation: "portrait",
+          unit: "mm",
+          format: "a4",
+        });
+
+        const imgData = canvas.toDataURL("image/jpeg", 0.95);
+        console.log("Image data created, length:", imgData.length);
+
+        const pdfWidth = 210; // A4 width in mm
+        const pdfHeight = 297; // A4 height in mm
+        const imgWidth = pdfWidth;
+        const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+
+        let yPosition = 0;
+
+        // Add first page
+        doc.addImage(imgData, "JPEG", 0, yPosition, imgWidth, imgHeight);
+
+        // Add additional pages if content exceeds one page
+        let remainingHeight = imgHeight;
+        while (remainingHeight > pdfHeight) {
+          doc.addPage();
+          yPosition -= pdfHeight;
+          doc.addImage(imgData, "JPEG", 0, yPosition, imgWidth, imgHeight);
+          remainingHeight -= pdfHeight;
+        }
+
+        // Generate filename with current timestamp
+        const now = new Date();
+        const timestamp = now.toISOString().slice(0, 10); // YYYY-MM-DD format
+        const timeStr = now.toTimeString().slice(0, 5).replace(":", ""); // HHMM format
+        const sanitizedClientName = selectedClient.personalData.namaLengkap
+          .replace(/[^a-zA-Z0-9\s]/g, "")
+          .replace(/\s+/g, "-")
+          .toLowerCase();
+        const sanitizedDocNumber = documentNumber.replace(/[^a-zA-Z0-9]/g, "-");
+
+        const fileName = `surat-kuasa-khusus-${sanitizedClientName}-${sanitizedDocNumber}-${timestamp}-${timeStr}.pdf`;
+
+        // Save PDF
+        console.log("Saving PDF as:", fileName);
+        doc.save(fileName);
+
+        toast.success(`PDF berhasil didownload: ${fileName}`);
       } catch (error) {
-        console.error("Error:", error);
-        toast.error("Gagal membuat PDF");
+        console.error("Error generating PDF:", error);
+        const errorMessage =
+          error instanceof Error
+            ? error.message
+            : "Terjadi kesalahan tidak diketahui";
+        toast.error(`Gagal membuat PDF: ${errorMessage}`);
       } finally {
         setIsDownloading(false);
       }
@@ -1946,7 +2667,7 @@ export default function SuratKuasaKhususPage() {
           <Button
             onClick={handleGenerate}
             className="flex items-center gap-2"
-            disabled={isGenerating}
+            disabled={isGenerating || isDownloading}
           >
             <Save className="h-4 w-4" />
             {isGenerating ? "Menyimpan..." : "Simpan ke Database"}
@@ -1956,85 +2677,414 @@ export default function SuratKuasaKhususPage() {
             onClick={handleDownloadPDF}
             variant="outline"
             className="flex items-center gap-2"
-            disabled={isDownloading}
+            disabled={isDownloading || isGenerating}
           >
             <Download className="h-4 w-4" />
             {isDownloading ? "Downloading..." : "Download PDF"}
           </Button>
         </div>
 
-        {history.length > 0 && (
-          <div className="space-y-4">
-            <h4 className="font-medium dark:text-gray-200">Riwayat Dokumen</h4>
-            <div className="border rounded dark:border-gray-700">
-              <div className="p-3 bg-gray-50 dark:bg-gray-800 font-medium border-b dark:border-gray-700 dark:text-gray-200">
-                Dokumen yang Telah Dibuat
-              </div>
-              <div className="max-h-40 overflow-y-auto">
-                {history.map((doc, index) => (
-                  <div
-                    key={index}
-                    className="p-3 border-b last:border-b-0 dark:border-gray-700"
-                  >
-                    <p className="font-medium dark:text-gray-200">
-                      {doc.clientName}
-                    </p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {doc.createdAt
-                        ? new Date(
-                            doc.createdAt.seconds * 1000
-                          ).toLocaleDateString("id-ID")
-                        : "Baru saja"}
-                    </p>
-                  </div>
-                ))}
-              </div>
+        {/* Progress Indicator untuk PDF Download */}
+        {isDownloading && (
+          <div className="space-y-2 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+            <div className="flex items-center gap-2">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+              <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
+                Sedang membuat PDF...
+              </p>
             </div>
+            <p className="text-xs text-blue-600 dark:text-blue-400">
+              Mohon tunggu, proses ini mungkin memakan waktu beberapa detik
+            </p>
+          </div>
+        )}
+
+        {/* Progress Indicator untuk Generate Document */}
+        {isGenerating && (
+          <div className="space-y-2 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+            <div className="flex items-center gap-2">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600"></div>
+              <p className="text-sm text-green-700 dark:text-green-300 font-medium">
+                Menyimpan dokumen ke database...
+              </p>
+            </div>
+            <p className="text-xs text-green-600 dark:text-green-400">
+              Dokumen sedang diproses dan disimpan
+            </p>
           </div>
         )}
       </div>
     );
   };
 
-  // Stepper
-  const renderStepper = () => (
-    <div className="flex gap-2 mb-6 overflow-x-auto">
-      {STEPS.map((s) => (
+  // Stepper dengan progress
+  const renderStepper = () => {
+    const progressPercentage = ((step - 1) / (STEPS.length - 1)) * 100;
+
+    return (
+      <div className="mb-6">
+        {/* Progress Bar */}
+        <div className="mb-4">
+          <div className="flex justify-between items-center text-sm text-gray-600 dark:text-gray-400 mb-2">
+            <div className="flex items-center gap-4">
+              <span>
+                Langkah {step} dari {STEPS.length}
+              </span>
+              <span className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded">
+                Ctrl + ← → untuk navigasi cepat
+              </span>
+            </div>
+            <span>{Math.round(progressPercentage)}% selesai</span>
+          </div>
+          <Progress value={progressPercentage} className="h-2" />
+        </div>
+
+        {/* Step Buttons */}
+        <div className="flex gap-2 overflow-x-auto">
+          {STEPS.map((s) => (
+            <Button
+              key={s.id}
+              variant={
+                step === s.id
+                  ? "default"
+                  : step > s.id
+                  ? "secondary"
+                  : "outline"
+              }
+              onClick={() => setStep(s.id)}
+              className="flex-shrink-0 relative"
+              disabled={s.id > step + 1} // Hanya bisa ke step berikutnya atau sebelumnya
+            >
+              {step > s.id && (
+                <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+                  <svg
+                    className="w-2 h-2 text-white"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </div>
+              )}
+              {s.id}. {s.title}
+            </Button>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  // Navigation buttons dengan validasi
+  const renderNavigation = () => {
+    // Validasi untuk setiap step
+    const canProceedToStep = (targetStep: number) => {
+      switch (targetStep) {
+        case 2: // Untuk ke step 2, harus ada client
+          return !!selectedClientId;
+        case 3: // Untuk ke step 3, harus ada client dan debt
+          return !!selectedClientId && !!selectedDebtId;
+        case 4: // Untuk ke step 4, harus ada client, debt, dan document number
+          return !!selectedClientId && !!selectedDebtId && !!documentNumber;
+        case 5: // Untuk ke step 5, harus ada template
+          return (
+            !!selectedClientId &&
+            !!selectedDebtId &&
+            !!documentNumber &&
+            !!selectedTemplateId
+          );
+        default:
+          return true;
+      }
+    };
+
+    const getNextStepMessage = () => {
+      if (step === 1 && !selectedClientId) return "Pilih klien terlebih dahulu";
+      if (step === 2 && !selectedDebtId) return "Pilih hutang terlebih dahulu";
+      if (step === 3 && !documentNumber)
+        return "Nomor dokumen belum ter-generate";
+      if (step === 4 && !selectedTemplateId)
+        return "Pilih template terlebih dahulu";
+      return "";
+    };
+
+    const canNext = step < STEPS.length && canProceedToStep(step + 1);
+    const nextMessage = getNextStepMessage();
+
+    return (
+      <div className="flex justify-between items-center mt-6 pt-4 border-t">
         <Button
-          key={s.id}
-          variant={step === s.id ? "default" : "outline"}
-          onClick={() => setStep(s.id)}
-          className="flex-shrink-0"
+          variant="outline"
+          onClick={() => setStep(step - 1)}
+          disabled={step === 1}
+          className="flex items-center gap-2"
         >
-          {s.id}. {s.title}
+          <ChevronLeft className="h-4 w-4" />
+          Sebelumnya
         </Button>
-      ))}
-    </div>
-  );
 
-  // Navigation buttons
-  const renderNavigation = () => (
-    <div className="flex justify-between mt-6 pt-4 border-t">
-      <Button
-        variant="outline"
-        onClick={() => setStep(step - 1)}
-        disabled={step === 1}
-        className="flex items-center gap-2"
-      >
-        <ChevronLeft className="h-4 w-4" />
-        Sebelumnya
-      </Button>
+        <div className="flex items-center gap-2">
+          {nextMessage && (
+            <p className="text-sm text-amber-600 dark:text-amber-400">
+              {nextMessage}
+            </p>
+          )}
+          <Button
+            onClick={() => setStep(step + 1)}
+            disabled={!canNext}
+            className="flex items-center gap-2"
+          >
+            Selanjutnya
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    );
+  };
 
-      <Button
-        onClick={() => setStep(step + 1)}
-        disabled={step === STEPS.length}
-        className="flex items-center gap-2"
-      >
-        Selanjutnya
-        <ChevronRight className="h-4 w-4" />
-      </Button>
-    </div>
-  );
+  // Document History Component
+  const renderDocumentHistory = () => {
+    return (
+      <Card className="mt-8">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="dark:text-gray-200">
+                Riwayat Dokumen
+              </CardTitle>
+              <CardDescription className="dark:text-gray-400">
+                Kelola dan lihat semua dokumen surat kuasa khusus yang telah
+                dibuat
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+              <FileText className="h-4 w-4" />
+              {filteredHistory.length} dokumen
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {/* Filters and Search */}
+          <div className="flex flex-col md:flex-row gap-4 mb-6">
+            <div className="flex-1">
+              <Input
+                placeholder="Cari berdasarkan nama klien, nomor dokumen..."
+                value={historySearchTerm}
+                onChange={(e) => {
+                  setHistorySearchTerm(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="dark:bg-gray-800 dark:border-gray-700"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Select
+                value={historyFilter}
+                onValueChange={(value: any) => {
+                  setHistoryFilter(value);
+                  setCurrentPage(1);
+                }}
+              >
+                <SelectTrigger className="w-32 dark:bg-gray-800 dark:border-gray-700">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
+                  <SelectItem value="all">Semua</SelectItem>
+                  <SelectItem value="today">Hari ini</SelectItem>
+                  <SelectItem value="week">7 hari</SelectItem>
+                  <SelectItem value="month">30 hari</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={sortBy}
+                onValueChange={(value: any) => setSortBy(value)}
+              >
+                <SelectTrigger className="w-32 dark:bg-gray-800 dark:border-gray-700">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
+                  <SelectItem value="date">Tanggal</SelectItem>
+                  <SelectItem value="client">Klien</SelectItem>
+                  <SelectItem value="document">Nomor</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setSortOrder(sortOrder === "asc" ? "desc" : "asc")
+                }
+                className="px-3 dark:border-gray-700"
+              >
+                {sortOrder === "asc" ? "↑" : "↓"}
+              </Button>
+            </div>
+          </div>
+
+          {/* Document List */}
+          {historyLoading ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="p-4 border rounded-lg dark:border-gray-700"
+                >
+                  <div className="animate-pulse">
+                    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-2"></div>
+                    <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/2 mb-2"></div>
+                    <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/3"></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : paginatedHistory.length === 0 ? (
+            <div className="text-center py-8 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
+              <FileText className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+              <p className="text-gray-500 dark:text-gray-400 mb-2">
+                {historySearchTerm || historyFilter !== "all"
+                  ? "Tidak ada dokumen yang sesuai dengan filter"
+                  : "Belum ada dokumen yang dibuat"}
+              </p>
+              {historySearchTerm || historyFilter !== "all" ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setHistorySearchTerm("");
+                    setHistoryFilter("all");
+                    setCurrentPage(1);
+                  }}
+                >
+                  Reset Filter
+                </Button>
+              ) : null}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {paginatedHistory.map((doc) => (
+                <Card
+                  key={doc.id}
+                  className="p-4 hover:shadow-md transition-shadow dark:bg-gray-800 dark:border-gray-700"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h4 className="font-medium dark:text-gray-200">
+                          {doc.clientName}
+                        </h4>
+                        <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 text-xs rounded">
+                          {doc.documentNumber}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+                        Dibuat:{" "}
+                        {new Date(doc.createdAt).toLocaleString("id-ID")}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-500 line-clamp-2">
+                        {doc.content?.replace(/<[^>]*>/g, "").substring(0, 100)}
+                        ...
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 ml-4">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleViewDocument(doc)}
+                        className="dark:border-gray-600"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDownloadExistingPDF(doc)}
+                        disabled={isDownloading}
+                        className="dark:border-gray-600"
+                      >
+                        <Download className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setDocumentToDelete(doc);
+                          setIsDeleteConfirmOpen(true);
+                        }}
+                        className="text-red-600 hover:text-red-700 dark:border-gray-600"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-6 pt-4 border-t dark:border-gray-700">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  Menampilkan {(currentPage - 1) * itemsPerPage + 1} -{" "}
+                  {Math.min(currentPage * itemsPerPage, filteredHistory.length)}{" "}
+                  dari {filteredHistory.length} dokumen
+                </span>
+                <Select
+                  value={itemsPerPage.toString()}
+                  onValueChange={(value) => {
+                    setItemsPerPage(parseInt(value));
+                    setCurrentPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-20 h-8 dark:bg-gray-800 dark:border-gray-700">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
+                    <SelectItem value="5">5</SelectItem>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="dark:border-gray-700"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  {currentPage} / {totalPages}
+                </span>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="dark:border-gray-700"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
 
   // Main render
   if (!isClient || isLoading) {
@@ -2308,6 +3358,112 @@ export default function SuratKuasaKhususPage() {
                 </p>
               </div>
 
+              {/* Progress Summary Card */}
+              <Card className="mb-6 border-l-4 border-l-blue-500">
+                <CardContent className="p-4">
+                  <div className="grid grid-cols-2 md:grid-cols-6 gap-4 text-center">
+                    <div
+                      className={`p-2 rounded ${
+                        selectedClientId
+                          ? "bg-green-50 dark:bg-green-900/20"
+                          : "bg-gray-50 dark:bg-gray-800"
+                      }`}
+                    >
+                      <div
+                        className={`text-xl ${
+                          selectedClientId ? "text-green-600" : "text-gray-400"
+                        }`}
+                      >
+                        {selectedClientId ? "✅" : "⏳"}
+                      </div>
+                      <div className="text-xs font-medium">Klien</div>
+                    </div>
+                    <div
+                      className={`p-2 rounded ${
+                        selectedDebtId
+                          ? "bg-green-50 dark:bg-green-900/20"
+                          : "bg-gray-50 dark:bg-gray-800"
+                      }`}
+                    >
+                      <div
+                        className={`text-xl ${
+                          selectedDebtId ? "text-green-600" : "text-gray-400"
+                        }`}
+                      >
+                        {selectedDebtId ? "✅" : "⏳"}
+                      </div>
+                      <div className="text-xs font-medium">Hutang</div>
+                    </div>
+                    <div
+                      className={`p-2 rounded ${
+                        documentNumber
+                          ? "bg-green-50 dark:bg-green-900/20"
+                          : "bg-gray-50 dark:bg-gray-800"
+                      }`}
+                    >
+                      <div
+                        className={`text-xl ${
+                          documentNumber ? "text-green-600" : "text-gray-400"
+                        }`}
+                      >
+                        {documentNumber ? "✅" : "⏳"}
+                      </div>
+                      <div className="text-xs font-medium">No. Surat</div>
+                    </div>
+                    <div
+                      className={`p-2 rounded ${
+                        selectedTemplateId
+                          ? "bg-green-50 dark:bg-green-900/20"
+                          : "bg-gray-50 dark:bg-gray-800"
+                      }`}
+                    >
+                      <div
+                        className={`text-xl ${
+                          selectedTemplateId
+                            ? "text-green-600"
+                            : "text-gray-400"
+                        }`}
+                      >
+                        {selectedTemplateId ? "✅" : "⏳"}
+                      </div>
+                      <div className="text-xs font-medium">Template</div>
+                    </div>
+                    <div
+                      className={`p-2 rounded ${
+                        step >= 5
+                          ? "bg-green-50 dark:bg-green-900/20"
+                          : "bg-gray-50 dark:bg-gray-800"
+                      }`}
+                    >
+                      <div
+                        className={`text-xl ${
+                          step >= 5 ? "text-green-600" : "text-gray-400"
+                        }`}
+                      >
+                        {step >= 5 ? "✅" : "⏳"}
+                      </div>
+                      <div className="text-xs font-medium">Review</div>
+                    </div>
+                    <div
+                      className={`p-2 rounded ${
+                        step >= 6
+                          ? "bg-green-50 dark:bg-green-900/20"
+                          : "bg-gray-50 dark:bg-gray-800"
+                      }`}
+                    >
+                      <div
+                        className={`text-xl ${
+                          step >= 6 ? "text-green-600" : "text-gray-400"
+                        }`}
+                      >
+                        {step >= 6 ? "✅" : "⏳"}
+                      </div>
+                      <div className="text-xs font-medium">Generate</div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
               {renderStepper()}
 
               <Card>
@@ -2325,11 +3481,135 @@ export default function SuratKuasaKhususPage() {
                   {step === 3 && renderStep3()}
                   {step === 4 && renderStep4()}
                   {step === 5 && renderStep5()}
-                  {step === 6 && renderStep6()}
 
                   {renderNavigation()}
                 </CardContent>
               </Card>
+
+              {/* Document History Section */}
+              {renderDocumentHistory()}
+
+              {/* Document View Dialog */}
+              <Dialog
+                open={isDocumentViewDialogOpen}
+                onOpenChange={setIsDocumentViewDialogOpen}
+              >
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle className="dark:text-gray-200">
+                      Detail Dokumen
+                    </DialogTitle>
+                    <DialogDescription className="dark:text-gray-400">
+                      {selectedDocumentForView?.documentNumber} -{" "}
+                      {selectedDocumentForView?.clientName}
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <strong>Nomor Dokumen:</strong>{" "}
+                        {selectedDocumentForView?.documentNumber}
+                      </div>
+                      <div>
+                        <strong>Klien:</strong>{" "}
+                        {selectedDocumentForView?.clientName}
+                      </div>
+                      <div>
+                        <strong>Dibuat:</strong>{" "}
+                        {selectedDocumentForView?.createdAt
+                          ? new Date(
+                              selectedDocumentForView.createdAt
+                            ).toLocaleString("id-ID")
+                          : ""}
+                      </div>
+                      <div>
+                        <strong>Template:</strong>{" "}
+                        {templates.find(
+                          (t) => t.id === selectedDocumentForView?.templateId
+                        )?.name || "Template tidak ditemukan"}
+                      </div>
+                    </div>
+
+                    <div className="border rounded-lg p-4 bg-white dark:bg-gray-900 dark:border-gray-700 max-h-96 overflow-y-auto">
+                      <div
+                        className="prose prose-sm max-w-none dark:prose-invert dark:text-gray-200"
+                        dangerouslySetInnerHTML={{
+                          __html: selectedDocumentForView?.content || "",
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsDocumentViewDialogOpen(false)}
+                    >
+                      Tutup
+                    </Button>
+                    <Button
+                      onClick={() =>
+                        handleDownloadExistingPDF(selectedDocumentForView)
+                      }
+                      disabled={isDownloading}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      {isDownloading ? "Downloading..." : "Download PDF"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              {/* Delete Confirmation Dialog */}
+              <Dialog
+                open={isDeleteConfirmOpen}
+                onOpenChange={setIsDeleteConfirmOpen}
+              >
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle className="dark:text-gray-200">
+                      Konfirmasi Hapus
+                    </DialogTitle>
+                    <DialogDescription className="dark:text-gray-400">
+                      Apakah Anda yakin ingin menghapus dokumen ini? Tindakan
+                      ini tidak dapat dibatalkan.
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  {documentToDelete && (
+                    <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                      <p className="font-medium dark:text-gray-200">
+                        {documentToDelete.clientName}
+                      </p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        {documentToDelete.documentNumber}
+                      </p>
+                    </div>
+                  )}
+
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setIsDeleteConfirmOpen(false);
+                        setDocumentToDelete(null);
+                      }}
+                    >
+                      Batal
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={() =>
+                        documentToDelete &&
+                        handleDeleteDocument(documentToDelete.id)
+                      }
+                    >
+                      Hapus
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </div>
           </div>
         </SidebarInset>

@@ -43,71 +43,73 @@
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --background: oklch(100% 0 0);
+  --foreground: oklch(20% 0 0);
+  --card: oklch(100% 0 0);
+  --card-foreground: oklch(20% 0 0);
+  --popover: oklch(100% 0 0);
+  --popover-foreground: oklch(20% 0 0);
+  --primary: oklch(24% 0 0);
+  --primary-foreground: oklch(98% 0 0);
+  --secondary: oklch(96% 0 0);
+  --secondary-foreground: oklch(24% 0 0);
+  --muted: oklch(96% 0 0);
+  --muted-foreground: oklch(64% 0 0);
+  --accent: oklch(96% 0 0);
+  --accent-foreground: oklch(24% 0 0);
+  --destructive: oklch(72% 0.22 23);
+  --destructive-foreground: oklch(98% 0 0);
+  --border: oklch(89% 0 0);
+  --input: oklch(89% 0 0);
+  --ring: oklch(74% 0 0);
+  --chart-1: oklch(72% 0.15 34);
+  --chart-2: oklch(66% 0.08 166);
+  --chart-3: oklch(48% 0.08 205);
+  --chart-4: oklch(80% 0.12 89);
+  --chart-5: oklch(76% 0.17 60);
+  --sidebar: oklch(98% 0 0);
+  --sidebar-foreground: oklch(20% 0 0);
+  --sidebar-primary: oklch(24% 0 0);
+  --sidebar-primary-foreground: oklch(98% 0 0);
+  --sidebar-accent: oklch(96% 0 0);
+  --sidebar-accent-foreground: oklch(24% 0 0);
+  --sidebar-border: oklch(89% 0 0);
+  --sidebar-ring: oklch(74% 0 0);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: oklch(20% 0 0);
+  --foreground: oklch(98% 0 0);
+  --card: oklch(20% 0 0);
+  --card-foreground: oklch(98% 0 0);
+  --popover: oklch(20% 0 0);
+  --popover-foreground: oklch(98% 0 0);
+  --primary: oklch(98% 0 0);
+  --primary-foreground: oklch(24% 0 0);
+  --secondary: oklch(30% 0 0);
+  --secondary-foreground: oklch(98% 0 0);
+  --muted: oklch(30% 0 0);
+  --muted-foreground: oklch(74% 0 0);
+  --accent: oklch(30% 0 0);
+  --accent-foreground: oklch(98% 0 0);
+  --destructive: oklch(58% 0.22 23);
+  --destructive-foreground: oklch(98% 0 0);
+  --border: oklch(30% 0 0);
+  --input: oklch(30% 0 0);
+  --ring: oklch(84% 0 0);
+  --chart-1: oklch(65% 0.15 250);
+  --chart-2: oklch(63% 0.08 166);
+  --chart-3: oklch(70% 0.12 89);
+  --chart-4: oklch(68% 0.15 290);
+  --chart-5: oklch(70% 0.17 340);
+  --sidebar: oklch(20% 0 0);
+  --sidebar-foreground: oklch(98% 0 0);
+  --sidebar-primary: oklch(65% 0.15 250);
+  --sidebar-primary-foreground: oklch(98% 0 0);
+  --sidebar-accent: oklch(30% 0 0);
+  --sidebar-accent-foreground: oklch(98% 0 0);
+  --sidebar-border: oklch(30% 0 0);
+  --sidebar-ring: oklch(84% 0 0);
 }
 
 @layer base {
@@ -337,7 +339,7 @@
 .ProseMirror p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
   float: left;
-  color: hsl(var(--muted-foreground));
+  color: oklch(74% 0 0 / 1);
   pointer-events: none;
   height: 0;
 }
@@ -345,7 +347,7 @@
 .ProseMirror .is-empty::before {
   content: attr(data-placeholder);
   float: left;
-  color: hsl(var(--muted-foreground));
+  color: oklch(74% 0 0 / 1);
   pointer-events: none;
   height: 0;
 }
@@ -366,7 +368,7 @@
 /* Theme-aware scrollbar styles */
 html {
   scrollbar-width: thin;
-  scrollbar-color: hsl(var(--border)) transparent;
+  scrollbar-color: color-mix(in srgb, oklch(89% 0 0), transparent) transparent;
 }
 
 ::-webkit-scrollbar {
@@ -379,12 +381,12 @@ html {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--border));
+  background: color-mix(in srgb, oklch(89% 0 0), transparent);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground));
+  background: color-mix(in srgb, oklch(74% 0 0), transparent);
 }
 
 /* Dark mode specific improvements */
@@ -410,9 +412,9 @@ html {
 .dark .animate-pulse {
   background: linear-gradient(
     90deg,
-    hsl(var(--muted)) 25%,
-    hsl(var(--muted-foreground) / 0.1) 50%,
-    hsl(var(--muted)) 75%
+    oklch(30% 0 0) 25%,
+    oklch(74% 0 0 / 0.1) 50%,
+    oklch(30% 0 0) 75%
   );
   background-size: 200% 100%;
   animation: pulse 2s infinite;
