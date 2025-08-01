@@ -106,8 +106,6 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { toast } from "sonner";
-import jsPDF from "jspdf";
-import "jspdf-autotable";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { usePageLoading } from "@/hooks/use-page-loading";
@@ -176,7 +174,6 @@ const STEPS = [
   { id: 2, title: "Pilih Hutang" },
   { id: 3, title: "Pengaturan Dokumen" },
   { id: 4, title: "Template & Variabel" },
-  { id: 5, title: "Generate" },
 ];
 
 export default function SuratKuasaKhususPage() {
@@ -246,6 +243,11 @@ export default function SuratKuasaKhususPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [previewDocument, setPreviewDocument] = useState<any>(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+
+  // Document Preview functionality
+  const [showDocumentPreview, setShowDocumentPreview] = useState(false);
+  const [previewContent, setPreviewContent] = useState<string>("");
+  const [isPreviewing, setIsPreviewing] = useState(false);
 
   // Utility function to convert month to Roman numerals
   const toRomanNumeral = (month: number): string => {
@@ -445,36 +447,55 @@ export default function SuratKuasaKhususPage() {
             description:
               "Template default untuk surat kuasa khusus dengan data lengkap",
             content: `<div style="text-align: center; margin-bottom: 30px;">
-            <h2>SURAT KUASA KHUSUS</h2>
-            <p>Nomor: {{nomor_surat}}</p>
+            <h3><strong><u>SURAT KUASA KHUSUS</u></strong></h3>
+            <p><strong>NO. {{nomor_surat}}</strong></p>
             </div>
             
-            <p>Yang bertanda tangan di bawah ini:</p>
-            <table style="margin-bottom: 20px;">
-              <tr><td style="width: 150px;"><strong>Nama</strong></td><td>: {{nama_klien}}</td></tr>
-              <tr><td><strong>NIK</strong></td><td>: {{nik_klien}}</td></tr>
-              <tr><td><strong>Jenis Kelamin</strong></td><td>: {{jenis_kelamin}}</td></tr>
-              <tr><td><strong>Pekerjaan</strong></td><td>: {{pekerjaan}}</td></tr>
-              <tr><td><strong>Alamat</strong></td><td>: {{alamat}}</td></tr>
-              <tr><td><strong>RT/RW</strong></td><td>: {{rt_rw}}</td></tr>
-              <tr><td><strong>Kelurahan</strong></td><td>: {{kelurahan}}</td></tr>
-              <tr><td><strong>Kecamatan</strong></td><td>: {{kecamatan}}</td></tr>
-              <tr><td><strong>Kota/Kabupaten</strong></td><td>: {{kota_kabupaten}}</td></tr>
-              <tr><td><strong>Provinsi</strong></td><td>: {{provinsi}}</td></tr>
-            </table>
+            <p>Yang bertanda tangan dibawah ini:</p>
+            <p><strong>{{nama_klien}}</strong>, NIK: <strong>{{nik_klien}}</strong>, Pekerjaan: <strong>{{pekerjaan}}</strong>, Alamat: {{alamat}}, {{rt_rw}}, {{kelurahan}}, {{kecamatan}}, {{kota_kabupaten}}, {{provinsi}}. Selanjutnya disebut sebagai <strong>PEMBERI KUASA</strong>.</p>
             
-            <p>Dengan ini memberikan kuasa kepada pihak hukum untuk menangani hutang:</p>
-            <table style="margin-bottom: 20px;">
-              <tr><td style="width: 150px;"><strong>Jenis Hutang</strong></td><td>: {{jenis_hutang}}</td></tr>
-              <tr><td><strong>Bank/Provider</strong></td><td>: {{bank_provider}}</td></tr>
-              <tr><td><strong>Nomor Kartu/Kontrak</strong></td><td>: {{nomor_kontrak}}</td></tr>
-              <tr><td><strong>Outstanding</strong></td><td>: Rp {{outstanding}}</td></tr>
-            </table>
+            <p>Memilih domisili Hukum di kantor kuasanya yang akan disebut dibawah ini, baik sendiri-sendiri maupun bersama-sama, dengan ini memberikan kuasa penuh kepada:</p>
             
-            <p>Demikian surat kuasa ini dibuat dengan sebenarnya.</p>
+            <ol>
+              <li><p><strong>ALI ASGAR TUHULELE, S.H. ( Advokat )</strong></p></li>
+              <li><p><strong>DJAYANTI (Senior Partner)</strong></p></li>
+            </ol>
             
-            <div style="margin-top: 30px;">
-              <p>{{kota_kabupaten}}, {{hari}}, {{tanggal_huruf}} {{bulan}} {{tahun_huruf}}</p>
+            <p>Advokat dan Senior Partner yang berkantor di ARSY GEMILANG Law Office, Beralamat di Komplek Sawangan Permai, Jl. Permata 8 No.27, Pasir Putih, Sawangan, Kota Depok, Jawa Barat 16519, selanjutnya disebut <strong>PENERIMA KUASA</strong>.</p>
+            
+            <p style="text-align: center;">-------------------------------------------------K H U S U S----------------------------------------------</p>
+            
+            <p><em>Bertindak untuk dan atas nama Pemberi Kuasa guna mengurus permasalahan </em><strong><em>{{jenis_hutang}}</em></strong><em> atas nama </em><strong>{{nama_klien}}</strong><em> dengan NO: </em><strong><em>{{nomor_kontrak}}</em></strong><em> yang diterbitkan oleh Bank: </em><strong><em>{{bank_provider}}</em></strong><em>, dalam kedudukannya sebagai nasabah pada Bank dimaksud.</em></p>
+            
+            <p>Untuk itu penerima kuasa diberi Hak untuk Mendampingi dan atau mewakili pemberi kuasa Untuk menghadap Pejabat dan atau instansi terkait, Mengajukan <em>Reschedule</em>, Mengajukan <em>Discount</em> Pelunasan, membuat somasi, Menjawab Somasi, mengadakan perdamaian, menerima dan atau melakukan pembayaran, Serta melakukan segala tindakan Hukum lain yang dianggap Perlu dan berguna Bagi kepentingan hukum pemberi Kuasa baik didalam maupun diluar peradilan.</p>
+            
+            <p>Surat Kuasa ini di berikan dengan <em>Honorarium, Hak Retensi, Hak Substitusi</em> baik sebagian atau seluruhnya.</p>
+            
+            <div style="margin-top: 40px;">
+              <table style="width: 100%; border-collapse: collapse;">
+                <tbody>
+                  <tr>
+                    <td style="text-align: left; padding: 10px; vertical-align: top;">{{kota_kabupaten}}, {{hari}}, {{tanggal_huruf}} {{bulan}} {{tahun_huruf}}</td>
+                    <td style="width: 50%;"></td>
+                  </tr>
+                  <tr>
+                    <td style="text-align: center; padding: 20px 10px; vertical-align: top; width: 50%;">
+                      <p><strong>Penerima Kuasa</strong></p>
+                    </td>
+                    <td style="text-align: center; padding: 20px 10px; vertical-align: top; width: 50%;">
+                      <p><strong>Pemberi Kuasa</strong></p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="height: 80px; padding: 10px; vertical-align: bottom; text-align: center;">
+                      <p style="margin: 0;"><strong>(ALI ASGAR TUHULELE, S.H.)</strong></p>
+                    </td>
+                    <td style="height: 80px; padding: 10px; vertical-align: bottom; text-align: center;">
+                      <p style="margin: 0;"><strong>({{nama_klien}})</strong></p>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>`,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
@@ -617,27 +638,20 @@ export default function SuratKuasaKhususPage() {
     setSelectedClientIndex(-1);
   }, [clients, clientSearchTerm]);
 
-  // Auto advance ke step 2 setelah client dipilih jika di step 1
+  // Update client search term when client is selected
   useEffect(() => {
     if (selectedClientId && selectedClient) {
       setClientSearchTerm(
         `${selectedClient.personalData.namaLengkap} (${selectedClient.personalData.nik})`
       );
       setShowClientDropdown(false);
-
-      // Auto advance ke step 2 setelah client dipilih jika di step 1
-      if (step === 1) {
-        toast.success(
-          `Klien ${selectedClient.personalData.namaLengkap} dipilih`
-        );
-        setTimeout(() => setStep(2), 500); // Delay sedikit untuk UX yang smooth
-      }
+      toast.success(`Klien ${selectedClient.personalData.namaLengkap} dipilih`);
     }
-  }, [selectedClientId, selectedClient, step]);
+  }, [selectedClientId, selectedClient]);
 
-  // Auto advance ke step 3 setelah debt dipilih jika di step 2
+  // Show success message when debt is selected
   useEffect(() => {
-    if (selectedDebtId && selectedClient && step === 2) {
+    if (selectedDebtId && selectedClient) {
       const debt = selectedClient.debtData.debts.find(
         (d) => d.id === selectedDebtId
       );
@@ -645,20 +659,16 @@ export default function SuratKuasaKhususPage() {
         toast.success(
           `Hutang ${debt.jenisHutang} - ${debt.bankProvider} dipilih`
         );
-        setTimeout(() => setStep(3), 500); // Delay sedikit untuk UX yang smooth
       }
     }
-  }, [selectedDebtId, selectedClient, step]);
+  }, [selectedDebtId, selectedClient]);
 
-  // Auto advance ke step 4 setelah document number ter-generate
+  // Show success message when document number is generated
   useEffect(() => {
-    if (documentNumber && step === 3) {
-      setTimeout(() => {
-        toast.success(`Nomor dokumen ${documentNumber} berhasil dibuat`);
-        setStep(4);
-      }, 1000); // Delay sedikit untuk UX yang smooth
+    if (documentNumber) {
+      toast.success(`Nomor dokumen ${documentNumber} berhasil dibuat`);
     }
-  }, [documentNumber, step]);
+  }, [documentNumber]);
 
   // Keyboard shortcuts untuk navigasi
   useEffect(() => {
@@ -916,185 +926,652 @@ export default function SuratKuasaKhususPage() {
     setIsDocumentViewDialogOpen(true);
   };
 
+  // Document Preview functionality
+  const handlePreviewDocumentFromEditor = () => {
+    if (!selectedClient || !selectedDebt) {
+      toast.error("Pilih klien dan hutang terlebih dahulu");
+      return;
+    }
+
+    if (!editorContent && !selectedTemplateId) {
+      toast.error("Tidak ada konten untuk di-preview");
+      return;
+    }
+
+    try {
+      setIsPreviewing(true);
+
+      // Get content from editor or selected template
+      const rawContent =
+        editorContent ||
+        templates.find((t) => t.id === selectedTemplateId)?.content ||
+        "";
+
+      if (!rawContent.trim()) {
+        toast.error("Konten kosong");
+        return;
+      }
+
+      // Process template with variables
+      const processedContent = processTemplate(rawContent);
+      setPreviewContent(processedContent);
+      setShowDocumentPreview(true);
+
+      toast.success("Preview dokumen berhasil dibuat");
+    } catch (error) {
+      console.error("Error:", error);
+      toast.error("Gagal membuat preview dokumen");
+    } finally {
+      setIsPreviewing(false);
+    }
+  };
+
+  const handleSaveAndDownloadPDFFromPreview = async () => {
+    if (!selectedClient || !selectedDebt || !previewContent) {
+      toast.error("Data tidak lengkap atau preview belum dibuat");
+      return;
+    }
+
+    try {
+      setIsDownloading(true);
+      setIsGenerating(true);
+
+      // First save to database
+      toast.info("Menyimpan dokumen...");
+
+      // Generate fresh document number for final document
+      const finalDocumentNumber = await generateDocumentNumber();
+
+      const documentData = {
+        documentNumber: finalDocumentNumber,
+        clientId: selectedClientId,
+        clientName: selectedClient.personalData.namaLengkap,
+        debtId: selectedDebtId,
+        templateId: selectedTemplateId,
+        customLetter: customLetter,
+        content: previewContent,
+        variables: getAvailableVariables(),
+        createdAt: serverTimestamp(),
+        type: "surat_kuasa_khusus",
+      };
+
+      const docRef = await addDoc(
+        collection(db, "generated_documents"),
+        documentData
+      );
+
+      toast.success("Dokumen berhasil disimpan");
+
+      // Update history
+      setHistory((prev) => [...prev, { id: docRef.id, ...documentData }]);
+
+      // Then generate PDF using jsPDF
+      toast.info("Membuat PDF...");
+
+      // Create a temporary element for better content rendering
+      const tempDiv = document.createElement("div");
+      tempDiv.innerHTML = previewContent;
+      tempDiv.style.fontFamily = "Arial, sans-serif";
+      tempDiv.style.fontSize = "12px";
+      tempDiv.style.lineHeight = "1.6";
+      tempDiv.style.color = "#000";
+      tempDiv.style.maxWidth = "800px";
+      tempDiv.style.margin = "0 auto";
+
+      // Append temporarily to get computed styles
+      tempDiv.style.position = "absolute";
+      tempDiv.style.left = "-9999px";
+      tempDiv.style.top = "-9999px";
+      document.body.appendChild(tempDiv);
+
+      // Import jsPDF dynamically
+      const jsPDF = (await import("jspdf")).default;
+
+      // Create PDF using jsPDF
+      const doc = new jsPDF({
+        unit: "mm",
+        format: "a4",
+        orientation: "portrait",
+      });
+
+      // Add content to PDF
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 20;
+      const contentWidth = pageWidth - margin * 2;
+
+      // Header
+      doc.setFontSize(16);
+      doc.setFont("helvetica", "bold");
+      doc.text("SURAT KUASA KHUSUS", pageWidth / 2, margin + 10, {
+        align: "center",
+      });
+
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Nomor: ${finalDocumentNumber}`, pageWidth / 2, margin + 20, {
+        align: "center",
+      });
+
+      let yPosition = margin + 35;
+
+      // Process HTML content to plain text with basic formatting preservation
+      const htmlElements = tempDiv.querySelectorAll("*");
+      const textContent: Array<{
+        text: string;
+        isBold: boolean;
+        isItalic: boolean;
+        isCenter: boolean;
+      }> = [];
+
+      function extractTextWithFormatting(element: Element) {
+        const style = window.getComputedStyle(element);
+        const isBold =
+          style.fontWeight === "bold" ||
+          style.fontWeight >= "600" ||
+          element.tagName === "STRONG" ||
+          element.tagName === "B";
+        const isItalic =
+          style.fontStyle === "italic" ||
+          element.tagName === "EM" ||
+          element.tagName === "I";
+        const isCenter =
+          style.textAlign === "center" || element.tagName === "CENTER";
+
+        if (
+          element.tagName === "P" ||
+          element.tagName === "DIV" ||
+          element.tagName === "H1" ||
+          element.tagName === "H2" ||
+          element.tagName === "H3"
+        ) {
+          const text = element.textContent?.trim() || "";
+          if (text) {
+            textContent.push({ text, isBold, isItalic, isCenter });
+          }
+        }
+      }
+
+      // If no specific elements found, use the full text content
+      if (htmlElements.length === 0) {
+        const fullText = tempDiv.textContent || "";
+        const lines = fullText.split("\n").filter((line) => line.trim());
+        lines.forEach((line) => {
+          textContent.push({
+            text: line.trim(),
+            isBold: false,
+            isItalic: false,
+            isCenter: false,
+          });
+        });
+      } else {
+        htmlElements.forEach(extractTextWithFormatting);
+      }
+
+      // If still no content, fall back to raw text
+      if (textContent.length === 0) {
+        const rawText =
+          tempDiv.textContent ||
+          previewContent.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ");
+        const lines = rawText.split(".").filter((line) => line.trim());
+        lines.forEach((line) => {
+          const cleanLine = line.trim();
+          if (cleanLine) {
+            textContent.push({
+              text: cleanLine + ".",
+              isBold: false,
+              isItalic: false,
+              isCenter: false,
+            });
+          }
+        });
+      }
+
+      // Add content to PDF
+      doc.setFontSize(11);
+
+      textContent.forEach((item, index) => {
+        // Check if we need a new page
+        if (yPosition > pageHeight - margin - 20) {
+          doc.addPage();
+          yPosition = margin;
+        }
+
+        // Set font style
+        if (item.isBold && item.isItalic) {
+          doc.setFont("helvetica", "bolditalic");
+        } else if (item.isBold) {
+          doc.setFont("helvetica", "bold");
+        } else if (item.isItalic) {
+          doc.setFont("helvetica", "italic");
+        } else {
+          doc.setFont("helvetica", "normal");
+        }
+
+        // Split long text to fit page width
+        const splitText = doc.splitTextToSize(item.text, contentWidth);
+        const textHeight = splitText.length * 6; // Approximate line height
+
+        // Check if we need a new page for this text block
+        if (yPosition + textHeight > pageHeight - margin) {
+          doc.addPage();
+          yPosition = margin;
+        }
+
+        // Add text to PDF
+        if (item.isCenter) {
+          doc.text(splitText, pageWidth / 2, yPosition, { align: "center" });
+        } else {
+          doc.text(splitText, margin, yPosition);
+        }
+
+        yPosition += textHeight + 3; // Add some spacing between paragraphs
+      });
+
+      // Clean up
+      document.body.removeChild(tempDiv);
+
+      // Generate filename
+      const timestamp = new Date()
+        .toISOString()
+        .slice(0, 16)
+        .replace(/[T:]/g, "-");
+      const clientName = selectedClient.personalData.namaLengkap
+        .replace(/[^a-zA-Z0-9]/g, "-")
+        .toLowerCase();
+      const fileName = `surat-kuasa-${clientName}-${timestamp}.pdf`;
+
+      // Save PDF
+      doc.save(fileName);
+
+      toast.success(
+        `Dokumen berhasil disimpan dan PDF didownload: ${fileName}`
+      );
+
+      // Close preview modal
+      setShowDocumentPreview(false);
+    } catch (error) {
+      console.error("Error:", error);
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Terjadi kesalahan tidak diketahui";
+      toast.error(`Gagal menyimpan atau membuat PDF: ${errorMessage}`);
+    } finally {
+      setIsDownloading(false);
+      setIsGenerating(false);
+    }
+  };
+
+  const handleDownloadPDFFromPreviewOnly = async () => {
+    if (!selectedClient || !selectedDebt || !previewContent) {
+      toast.error("Data tidak lengkap atau preview belum dibuat");
+      return;
+    }
+
+    try {
+      setIsDownloading(true);
+      toast.info("Membuat PDF...");
+
+      // Create a temporary element for better content rendering
+      const tempDiv = document.createElement("div");
+      tempDiv.innerHTML = previewContent;
+      tempDiv.style.fontFamily = "Arial, sans-serif";
+      tempDiv.style.fontSize = "12px";
+      tempDiv.style.lineHeight = "1.6";
+      tempDiv.style.color = "#000";
+      tempDiv.style.maxWidth = "800px";
+      tempDiv.style.margin = "0 auto";
+
+      // Append temporarily to get computed styles
+      tempDiv.style.position = "absolute";
+      tempDiv.style.left = "-9999px";
+      tempDiv.style.top = "-9999px";
+      document.body.appendChild(tempDiv);
+
+      // Import jsPDF dynamically
+      const jsPDF = (await import("jspdf")).default;
+
+      // Create PDF using jsPDF
+      const doc = new jsPDF({
+        unit: "mm",
+        format: "a4",
+        orientation: "portrait",
+      });
+
+      // Add content to PDF (same logic as above)
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 20;
+      const contentWidth = pageWidth - margin * 2;
+
+      // Header
+      doc.setFontSize(16);
+      doc.setFont("helvetica", "bold");
+      doc.text("SURAT KUASA KHUSUS", pageWidth / 2, margin + 10, {
+        align: "center",
+      });
+
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Nomor: ${documentNumber}`, pageWidth / 2, margin + 20, {
+        align: "center",
+      });
+
+      let yPosition = margin + 35;
+
+      // Process HTML content to plain text with basic formatting preservation
+      const htmlElements = tempDiv.querySelectorAll("*");
+      const textContent: Array<{
+        text: string;
+        isBold: boolean;
+        isItalic: boolean;
+        isCenter: boolean;
+      }> = [];
+
+      function extractTextWithFormatting(element: Element) {
+        const style = window.getComputedStyle(element);
+        const isBold =
+          style.fontWeight === "bold" ||
+          style.fontWeight >= "600" ||
+          element.tagName === "STRONG" ||
+          element.tagName === "B";
+        const isItalic =
+          style.fontStyle === "italic" ||
+          element.tagName === "EM" ||
+          element.tagName === "I";
+        const isCenter =
+          style.textAlign === "center" || element.tagName === "CENTER";
+
+        if (
+          element.tagName === "P" ||
+          element.tagName === "DIV" ||
+          element.tagName === "H1" ||
+          element.tagName === "H2" ||
+          element.tagName === "H3"
+        ) {
+          const text = element.textContent?.trim() || "";
+          if (text) {
+            textContent.push({ text, isBold, isItalic, isCenter });
+          }
+        }
+      }
+
+      // If no specific elements found, use the full text content
+      if (htmlElements.length === 0) {
+        const fullText = tempDiv.textContent || "";
+        const lines = fullText.split("\n").filter((line) => line.trim());
+        lines.forEach((line) => {
+          textContent.push({
+            text: line.trim(),
+            isBold: false,
+            isItalic: false,
+            isCenter: false,
+          });
+        });
+      } else {
+        htmlElements.forEach(extractTextWithFormatting);
+      }
+
+      // If still no content, fall back to raw text
+      if (textContent.length === 0) {
+        const rawText =
+          tempDiv.textContent ||
+          previewContent.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ");
+        const lines = rawText.split(".").filter((line) => line.trim());
+        lines.forEach((line) => {
+          const cleanLine = line.trim();
+          if (cleanLine) {
+            textContent.push({
+              text: cleanLine + ".",
+              isBold: false,
+              isItalic: false,
+              isCenter: false,
+            });
+          }
+        });
+      }
+
+      // Add content to PDF
+      doc.setFontSize(11);
+
+      textContent.forEach((item, index) => {
+        // Check if we need a new page
+        if (yPosition > pageHeight - margin - 20) {
+          doc.addPage();
+          yPosition = margin;
+        }
+
+        // Set font style
+        if (item.isBold && item.isItalic) {
+          doc.setFont("helvetica", "bolditalic");
+        } else if (item.isBold) {
+          doc.setFont("helvetica", "bold");
+        } else if (item.isItalic) {
+          doc.setFont("helvetica", "italic");
+        } else {
+          doc.setFont("helvetica", "normal");
+        }
+
+        // Split long text to fit page width
+        const splitText = doc.splitTextToSize(item.text, contentWidth);
+        const textHeight = splitText.length * 6; // Approximate line height
+
+        // Check if we need a new page for this text block
+        if (yPosition + textHeight > pageHeight - margin) {
+          doc.addPage();
+          yPosition = margin;
+        }
+
+        // Add text to PDF
+        if (item.isCenter) {
+          doc.text(splitText, pageWidth / 2, yPosition, { align: "center" });
+        } else {
+          doc.text(splitText, margin, yPosition);
+        }
+
+        yPosition += textHeight + 3; // Add some spacing between paragraphs
+      });
+
+      // Clean up
+      document.body.removeChild(tempDiv);
+
+      // Generate filename
+      const timestamp = new Date()
+        .toISOString()
+        .slice(0, 16)
+        .replace(/[T:]/g, "-");
+      const clientName = selectedClient.personalData.namaLengkap
+        .replace(/[^a-zA-Z0-9]/g, "-")
+        .toLowerCase();
+      const fileName = `surat-kuasa-preview-${clientName}-${timestamp}.pdf`;
+
+      // Save PDF
+      doc.save(fileName);
+
+      toast.success(`PDF berhasil didownload: ${fileName}`);
+    } catch (error) {
+      console.error("Error:", error);
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Terjadi kesalahan tidak diketahui";
+      toast.error(`Gagal membuat PDF: ${errorMessage}`);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  // PDF Download for existing documents using html2pdf.js for better HTML formatting preservation
   const handleDownloadExistingPDF = async (document: any) => {
     try {
       setIsDownloading(true);
-      toast.info("Sedang membuat PDF...");
+      toast.info("Membuat PDF...");
 
       if (!document.content || !document.content.trim()) {
-        throw new Error("Konten dokumen kosong atau tidak valid");
+        throw new Error("Konten dokumen kosong");
       }
 
-      // Create a temporary container for better PDF rendering
+      // Create a temporary container for PDF generation
       const tempContainer = document.createElement("div");
       tempContainer.style.position = "absolute";
       tempContainer.style.left = "-9999px";
       tempContainer.style.top = "-9999px";
-      tempContainer.style.width = "794px";
-      tempContainer.style.minHeight = "1123px";
-      tempContainer.style.maxWidth = "794px";
+      tempContainer.style.width = "794px"; // A4 width in pixels at 96 DPI
       tempContainer.style.padding = "40px";
       tempContainer.style.fontFamily = "Arial, sans-serif";
       tempContainer.style.fontSize = "14px";
       tempContainer.style.lineHeight = "1.6";
       tempContainer.style.color = "#000";
       tempContainer.style.backgroundColor = "#fff";
-      tempContainer.style.boxSizing = "border-box";
 
-      const styledContent = `
-        <style>
-          @page { 
-            size: A4; 
-            margin: 20mm; 
-          }
-          * { 
-            margin: 0; 
-            padding: 0; 
-            box-sizing: border-box; 
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
-          body { 
-            font-family: 'Arial', 'Helvetica', sans-serif; 
-            font-size: 14px; 
-            line-height: 1.6; 
-            color: #000 !important; 
-            background: #fff !important;
-            width: 100%;
-            max-width: 794px;
-            margin: 0 auto;
-          }
-          h1, h2, h3 { 
-            text-align: center; 
-            margin-bottom: 20px; 
-            font-weight: bold; 
-            page-break-after: avoid;
-            color: #000 !important;
-          }
-          h1 { font-size: 20px; margin-bottom: 15px; }
-          h2 { font-size: 18px; margin-bottom: 15px; }
-          h3 { font-size: 16px; margin-bottom: 15px; }
-          p { 
-            margin-bottom: 15px; 
-            text-align: justify; 
-            page-break-inside: avoid;
-            orphans: 2;
-            widows: 2;
-            color: #000 !important;
-          }
-          table { 
-            width: 100%; 
-            border-collapse: collapse; 
-            margin-bottom: 20px; 
-            page-break-inside: avoid;
-          }
-          td { 
-            padding: 8px 4px; 
-            vertical-align: top; 
-            border: none; 
-            line-height: 1.4;
-            color: #000 !important;
-          }
-          strong, b { 
-            font-weight: bold; 
-            color: #000 !important;
-          }
-          .text-center { text-align: center; }
-          .text-right { text-align: right; }
-          .text-left { text-align: left; }
-          .mb-30 { margin-bottom: 30px; }
-          .mb-20 { margin-bottom: 20px; }
-          .mt-30 { margin-top: 30px; }
-          .page-break { page-break-before: always; }
-          .no-break { page-break-inside: avoid; }
-          
-          /* Force black text for all elements */
-          * {
-            color: #000 !important;
-          }
-        </style>
-        <div style="width: 100%; max-width: 794px; margin: 0 auto; padding: 20px; background: #fff;">
-          ${document.content}
-        </div>
-      `;
+      // Add document content to container
+      tempContainer.innerHTML = document.content;
 
-      tempContainer.innerHTML = styledContent;
+      // Append to body temporarily
       document.body.appendChild(tempContainer);
 
-      // Wait longer for content to fully load
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      console.log("Starting PDF conversion for existing document...");
-
-      const html2canvas = (await import("html2canvas")).default;
-      const canvas = await html2canvas(tempContainer, {
-        useCORS: true,
-        allowTaint: false,
-        background: "#ffffff",
-        logging: false,
-        width: 794,
-        height: tempContainer.scrollHeight,
-      });
-
-      console.log("Canvas created:", canvas.width, "x", canvas.height);
-
-      document.body.removeChild(tempContainer);
-
-      if (!canvas || canvas.width === 0 || canvas.height === 0) {
-        throw new Error("Gagal membuat canvas dari konten dokumen");
-      }
-
-      const doc = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
-      });
-
-      const imgData = canvas.toDataURL("image/jpeg", 0.95);
-      const pdfWidth = 210;
-      const pdfHeight = 297;
-      const imgWidth = pdfWidth;
-      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-
-      let yPosition = 0;
-
-      doc.addImage(imgData, "JPEG", 0, yPosition, imgWidth, imgHeight);
-
-      let remainingHeight = imgHeight;
-      while (remainingHeight > pdfHeight) {
-        doc.addPage();
-        yPosition -= pdfHeight;
-        doc.addImage(imgData, "JPEG", 0, yPosition, imgWidth, imgHeight);
-        remainingHeight -= pdfHeight;
-      }
-
-      const timestamp = new Date().toISOString().slice(0, 10);
-      const timeStr = new Date().toTimeString().slice(0, 5).replace(":", "");
-
-      // Handle potential missing properties with fallbacks
-      const clientName =
-        document.clientName || document.title || "unknown-client";
-      const docNumber = document.documentNumber || document.id || "unknown-doc";
-
-      const sanitizedClientName = clientName
-        .replace(/[^a-zA-Z0-9\s]/g, "")
-        .replace(/\s+/g, "-")
+      // Generate filename
+      const timestamp = new Date()
+        .toISOString()
+        .slice(0, 16)
+        .replace(/[T:]/g, "-");
+      const clientName = (document.clientName || "unknown")
+        .replace(/[^a-zA-Z0-9]/g, "-")
         .toLowerCase();
-      const sanitizedDocNumber = docNumber.replace(/[^a-zA-Z0-9]/g, "-");
+      const fileName = `surat-kuasa-${clientName}-${timestamp}.pdf`;
 
-      const fileName = `surat-kuasa-khusus-${sanitizedClientName}-${sanitizedDocNumber}-${timestamp}-${timeStr}.pdf`;
+      // Import html2pdf dynamically
+      const html2pdf = (await import("html2pdf.js")).default;
 
-      console.log("Saving existing document PDF as:", fileName);
-      doc.save(fileName);
+      // Configure PDF options
+      const options = {
+        margin: [15, 15, 15, 15], // top, right, bottom, left in mm
+        filename: fileName,
+        image: { type: "jpeg", quality: 0.98 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          letterRendering: true,
+          allowTaint: false,
+        },
+        jsPDF: {
+          unit: "mm",
+          format: "a4",
+          orientation: "portrait",
+          compressPDF: true,
+        },
+        pagebreak: { mode: ["avoid-all", "css", "legacy"] },
+      };
+
+      // Generate and download PDF
+      await html2pdf().set(options).from(tempContainer).save();
+
+      // Clean up
+      document.body.removeChild(tempContainer);
 
       toast.success(`PDF berhasil didownload: ${fileName}`);
     } catch (error) {
-      console.error("Error generating PDF for existing document:", error);
+      console.error("Error:", error);
       const errorMessage =
         error instanceof Error
           ? error.message
           : "Terjadi kesalahan tidak diketahui";
       toast.error(`Gagal membuat PDF: ${errorMessage}`);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const handleDownloadExcelFromEditor = async () => {
+    if (!selectedClient || !selectedDebt) {
+      toast.error("Pilih klien dan hutang terlebih dahulu");
+      return;
+    }
+
+    try {
+      setIsDownloading(true);
+      toast.info("Membuat dokumen Excel...");
+
+      // Create Excel-like data structure
+      const excelData = [
+        ["SURAT KUASA KHUSUS"],
+        [`Nomor: ${documentNumber}`],
+        [""],
+        ["INFORMASI KLIEN"],
+        ["Nama", selectedClient.personalData.namaLengkap],
+        ["NIK", selectedClient.personalData.nik],
+        [
+          "Jenis Kelamin",
+          selectedClient.personalData.jenisKelamin || "Tidak diketahui",
+        ],
+        [
+          "Pekerjaan",
+          selectedClient.jobData?.jenisPekerjaan ||
+            selectedClient.jobData?.jabatan ||
+            "Tidak diketahui",
+        ],
+        ["Alamat", selectedClient.contactData?.alamat || "Tidak diketahui"],
+        ["RT/RW", selectedClient.contactData?.rtRw || "000/000"],
+        [
+          "Kelurahan",
+          selectedClient.contactData?.kelurahanDesa || "Tidak diketahui",
+        ],
+        [
+          "Kecamatan",
+          selectedClient.contactData?.kecamatan || "Tidak diketahui",
+        ],
+        [
+          "Kota/Kabupaten",
+          selectedClient.contactData?.kotaKabupaten || "Tidak diketahui",
+        ],
+        ["Provinsi", selectedClient.contactData?.provinsi || "Tidak diketahui"],
+        [""],
+        ["INFORMASI HUTANG"],
+        ["Jenis Hutang", selectedDebt.jenisHutang],
+        ["Bank/Provider", selectedDebt.bankProvider],
+        ["Nomor Kartu/Kontrak", selectedDebt.nomorKartuKontrak],
+        ["Outstanding", `Rp ${selectedDebt.outstanding}`],
+        [""],
+        ["TANGGAL DOKUMEN"],
+        ["Tanggal Dibuat", new Date().toLocaleDateString("id-ID")],
+        ["Nomor Dokumen", documentNumber],
+      ];
+
+      // Convert to CSV format
+      const csvContent = excelData
+        .map((row) => row.map((cell) => `"${cell}"`).join(","))
+        .join("\n");
+
+      // Create blob and download
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+
+      const timestamp = new Date()
+        .toISOString()
+        .slice(0, 16)
+        .replace(/[T:]/g, "-");
+      const clientName = selectedClient.personalData.namaLengkap
+        .replace(/[^a-zA-Z0-9]/g, "-")
+        .toLowerCase();
+      const fileName = `surat-kuasa-${clientName}-${timestamp}.csv`;
+
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast.success(`File Excel berhasil didownload: ${fileName}`);
+    } catch (error) {
+      console.error("Error:", error);
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Terjadi kesalahan tidak diketahui";
+      toast.error(`Gagal membuat file Excel: ${errorMessage}`);
     } finally {
       setIsDownloading(false);
     }
@@ -1553,24 +2030,6 @@ export default function SuratKuasaKhususPage() {
                     className="dark:text-gray-200 dark:hover:bg-gray-700"
                   >
                     PINJOL (Pinjaman Online)
-                  </SelectItem>
-                  <SelectItem
-                    value="MORTGAGE"
-                    className="dark:text-gray-200 dark:hover:bg-gray-700"
-                  >
-                    MORTGAGE (Kredit Rumah)
-                  </SelectItem>
-                  <SelectItem
-                    value="AUTO"
-                    className="dark:text-gray-200 dark:hover:bg-gray-700"
-                  >
-                    AUTO (Kredit Kendaraan)
-                  </SelectItem>
-                  <SelectItem
-                    value="UMUM"
-                    className="dark:text-gray-200 dark:hover:bg-gray-700"
-                  >
-                    UMUM (Keperluan Umum)
                   </SelectItem>
                 </SelectContent>
               </Select>
@@ -2318,13 +2777,72 @@ export default function SuratKuasaKhususPage() {
         {/* Template Editor */}
         {selectedTemplate && (
           <div className="space-y-4">
-            <Label>Edit Template</Label>
+            <div className="flex items-center justify-between">
+              <Label>Edit Template</Label>
+              <div className="flex gap-2">
+                <Button
+                  onClick={handlePreviewDocumentFromEditor}
+                  variant="default"
+                  size="sm"
+                  className="flex items-center gap-2"
+                  disabled={isPreviewing || !selectedClient || !selectedDebt}
+                >
+                  <Eye className="h-4 w-4" />
+                  {isPreviewing ? "Membuat Preview..." : "Preview Dokumen"}
+                </Button>
+              </div>
+            </div>
+
+            {/* Info Message */}
+            {(!selectedClient || !selectedDebt) && (
+              <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                <div className="flex items-start gap-2">
+                  <div className="w-4 h-4 text-amber-500 mt-0.5">⚠️</div>
+                  <div className="text-sm text-amber-700 dark:text-amber-300">
+                    <strong>Perhatian:</strong> Pilih klien dan hutang terlebih
+                    dahulu untuk dapat memproses template dengan data yang
+                    lengkap.
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="border rounded-lg p-4 dark:border-gray-700">
               <RichEditor
                 content={editorContent || selectedTemplate.content}
                 onChange={setEditorContent}
               />
             </div>
+
+            {/* Progress Indicator untuk Download dari Editor */}
+            {isDownloading && (
+              <div className="space-y-2 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                <div className="flex items-center gap-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                  <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
+                    Sedang memproses dokumen dari editor...
+                  </p>
+                </div>
+                <p className="text-xs text-blue-600 dark:text-blue-400">
+                  Konten editor sedang diproses menjadi format yang dipilih
+                </p>
+              </div>
+            )}
+
+            {/* Progress Indicator untuk Preview */}
+            {isPreviewing && (
+              <div className="space-y-2 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                <div className="flex items-center gap-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600"></div>
+                  <p className="text-sm text-green-700 dark:text-green-300 font-medium">
+                    Sedang membuat preview dokumen...
+                  </p>
+                </div>
+                <p className="text-xs text-green-600 dark:text-green-400">
+                  Memproses template dengan data klien dan variabel
+                </p>
+              </div>
+            )}
           </div>
         )}
 
@@ -2376,343 +2894,6 @@ export default function SuratKuasaKhususPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </div>
-    );
-  };
-
-  // Step 5: Generate dan Simpan (previously step 5)
-  const renderStep5 = () => {
-    // State hooks moved to top level component
-    // const [isGenerating, setIsGenerating] = useState(false);
-    // const [isDownloading, setIsDownloading] = useState(false);
-
-    const handleGenerate = async () => {
-      if (!selectedClient || !selectedDebt) {
-        toast.error("Data tidak lengkap");
-        return;
-      }
-
-      try {
-        setIsGenerating(true);
-
-        // Generate fresh document number for final document
-        const finalDocumentNumber = await generateDocumentNumber();
-
-        const finalContent = processTemplate(
-          editorContent ||
-            templates.find((t) => t.id === selectedTemplateId)?.content ||
-            ""
-        );
-
-        const documentData = {
-          documentNumber: finalDocumentNumber,
-          clientId: selectedClientId,
-          clientName: selectedClient.personalData.namaLengkap,
-          debtId: selectedDebtId,
-          templateId: selectedTemplateId,
-          customLetter: customLetter,
-          content: finalContent,
-          variables: getAvailableVariables(),
-          createdAt: serverTimestamp(),
-          type: "surat_kuasa_khusus",
-        };
-
-        const docRef = await addDoc(
-          collection(db, "generated_documents"),
-          documentData
-        );
-        toast.success("Dokumen berhasil disimpan");
-
-        // Update history
-        setHistory((prev) => [...prev, { id: docRef.id, ...documentData }]);
-      } catch (error) {
-        console.error("Error:", error);
-        toast.error("Gagal menyimpan dokumen");
-      } finally {
-        setIsGenerating(false);
-      }
-    };
-
-    const handleDownloadPDF = async () => {
-      if (!selectedClient || !selectedDebt) {
-        toast.error("Data tidak lengkap");
-        return;
-      }
-
-      try {
-        setIsDownloading(true);
-        toast.info("Sedang membuat PDF...");
-
-        // Get final content with variables replaced
-        const finalContent = processTemplate(
-          editorContent ||
-            templates.find((t) => t.id === selectedTemplateId)?.content ||
-            ""
-        );
-
-        if (!finalContent.trim()) {
-          throw new Error("Konten dokumen kosong");
-        }
-
-        // Create a temporary container for better PDF rendering
-        const tempContainer = document.createElement("div");
-        tempContainer.style.position = "absolute";
-        tempContainer.style.left = "-9999px";
-        tempContainer.style.top = "-9999px";
-        tempContainer.style.width = "794px"; // A4 width at 96dpi
-        tempContainer.style.minHeight = "1123px"; // A4 height at 96dpi
-        tempContainer.style.maxWidth = "794px";
-        tempContainer.style.padding = "40px";
-        tempContainer.style.fontFamily = "Arial, sans-serif";
-        tempContainer.style.fontSize = "14px";
-        tempContainer.style.lineHeight = "1.6";
-        tempContainer.style.color = "#000";
-        tempContainer.style.backgroundColor = "#fff";
-        tempContainer.style.boxSizing = "border-box";
-
-        // Enhanced CSS for better PDF formatting
-        const styledContent = `
-          <style>
-            @page { 
-              size: A4; 
-              margin: 20mm; 
-            }
-            * { 
-              margin: 0; 
-              padding: 0; 
-              box-sizing: border-box; 
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-            }
-            body { 
-              font-family: 'Arial', 'Helvetica', sans-serif; 
-              font-size: 14px; 
-              line-height: 1.6; 
-              color: #000 !important; 
-              background: #fff !important;
-              width: 100%;
-              max-width: 794px;
-              margin: 0 auto;
-            }
-            h1, h2, h3 { 
-              text-align: center; 
-              margin-bottom: 20px; 
-              font-weight: bold; 
-              page-break-after: avoid;
-              color: #000 !important;
-            }
-            h1 { font-size: 20px; margin-bottom: 15px; }
-            h2 { font-size: 18px; margin-bottom: 15px; }
-            h3 { font-size: 16px; margin-bottom: 15px; }
-            p { 
-              margin-bottom: 15px; 
-              text-align: justify; 
-              page-break-inside: avoid;
-              orphans: 2;
-              widows: 2;
-              color: #000 !important;
-            }
-            table { 
-              width: 100%; 
-              border-collapse: collapse; 
-              margin-bottom: 20px; 
-              page-break-inside: avoid;
-            }
-            td { 
-              padding: 8px 4px; 
-              vertical-align: top; 
-              border: none; 
-              line-height: 1.4;
-              color: #000 !important;
-            }
-            strong, b { 
-              font-weight: bold; 
-              color: #000 !important;
-            }
-            .text-center { text-align: center; }
-            .text-right { text-align: right; }
-            .text-left { text-align: left; }
-            .mb-30 { margin-bottom: 30px; }
-            .mb-20 { margin-bottom: 20px; }
-            .mt-30 { margin-top: 30px; }
-            .page-break { page-break-before: always; }
-            .no-break { page-break-inside: avoid; }
-            
-            /* Force black text for all elements */
-            * {
-              color: #000 !important;
-            }
-          </style>
-          <div style="width: 100%; max-width: 794px; margin: 0 auto; padding: 20px; background: #fff;">
-            ${finalContent}
-          </div>
-        `;
-
-        tempContainer.innerHTML = styledContent;
-        document.body.appendChild(tempContainer);
-
-        // Wait longer for fonts and content to fully load
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-
-        console.log("Starting PDF conversion...");
-
-        // Import html2canvas dynamically
-        const html2canvas = (await import("html2canvas")).default;
-
-        // Convert HTML to canvas with optimized settings
-        const canvas = await html2canvas(tempContainer, {
-          useCORS: true,
-          allowTaint: false,
-          background: "#ffffff",
-          logging: false,
-          width: 794,
-          height: tempContainer.scrollHeight,
-        });
-
-        console.log("Canvas created:", canvas.width, "x", canvas.height);
-
-        // Remove temporary container
-        document.body.removeChild(tempContainer);
-
-        // Validate canvas
-        if (!canvas || canvas.width === 0 || canvas.height === 0) {
-          throw new Error("Gagal membuat canvas dari konten HTML");
-        }
-
-        // Create PDF with proper dimensions
-        const doc = new jsPDF({
-          orientation: "portrait",
-          unit: "mm",
-          format: "a4",
-        });
-
-        const imgData = canvas.toDataURL("image/jpeg", 0.95);
-        console.log("Image data created, length:", imgData.length);
-
-        const pdfWidth = 210; // A4 width in mm
-        const pdfHeight = 297; // A4 height in mm
-        const imgWidth = pdfWidth;
-        const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-
-        let yPosition = 0;
-
-        // Add first page
-        doc.addImage(imgData, "JPEG", 0, yPosition, imgWidth, imgHeight);
-
-        // Add additional pages if content exceeds one page
-        let remainingHeight = imgHeight;
-        while (remainingHeight > pdfHeight) {
-          doc.addPage();
-          yPosition -= pdfHeight;
-          doc.addImage(imgData, "JPEG", 0, yPosition, imgWidth, imgHeight);
-          remainingHeight -= pdfHeight;
-        }
-
-        // Generate filename with current timestamp
-        const now = new Date();
-        const timestamp = now.toISOString().slice(0, 10); // YYYY-MM-DD format
-        const timeStr = now.toTimeString().slice(0, 5).replace(":", ""); // HHMM format
-        const sanitizedClientName = selectedClient.personalData.namaLengkap
-          .replace(/[^a-zA-Z0-9\s]/g, "")
-          .replace(/\s+/g, "-")
-          .toLowerCase();
-        const sanitizedDocNumber = documentNumber.replace(/[^a-zA-Z0-9]/g, "-");
-
-        const fileName = `surat-kuasa-khusus-${sanitizedClientName}-${sanitizedDocNumber}-${timestamp}-${timeStr}.pdf`;
-
-        // Save PDF
-        console.log("Saving PDF as:", fileName);
-        doc.save(fileName);
-
-        toast.success(`PDF berhasil didownload: ${fileName}`);
-      } catch (error) {
-        console.error("Error generating PDF:", error);
-        const errorMessage =
-          error instanceof Error
-            ? error.message
-            : "Terjadi kesalahan tidak diketahui";
-        toast.error(`Gagal membuat PDF: ${errorMessage}`);
-      } finally {
-        setIsDownloading(false);
-      }
-    };
-
-    return (
-      <div className="space-y-6">
-        <h3 className="text-lg font-medium dark:text-gray-200">
-          Generate Dokumen
-        </h3>
-
-        <div className="p-4 border rounded bg-gray-50 dark:bg-gray-800 dark:border-gray-700">
-          <h4 className="font-medium mb-2 dark:text-gray-200">Ringkasan:</h4>
-          <div className="space-y-1 text-sm">
-            <p className="dark:text-gray-300">
-              <strong>Nomor Surat:</strong> {documentNumber}
-            </p>
-            <p className="dark:text-gray-300">
-              <strong>Klien:</strong> {selectedClient?.personalData.namaLengkap}
-            </p>
-            <p className="dark:text-gray-300">
-              <strong>Hutang:</strong> {selectedDebt?.jenisHutang} -{" "}
-              {selectedDebt?.bankProvider}
-            </p>
-            <p className="dark:text-gray-300">
-              <strong>Template:</strong>{" "}
-              {templates.find((t) => t.id === selectedTemplateId)?.name}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex gap-4">
-          <Button
-            onClick={handleGenerate}
-            className="flex items-center gap-2"
-            disabled={isGenerating || isDownloading}
-          >
-            <Save className="h-4 w-4" />
-            {isGenerating ? "Menyimpan..." : "Simpan ke Database"}
-          </Button>
-
-          <Button
-            onClick={handleDownloadPDF}
-            variant="outline"
-            className="flex items-center gap-2"
-            disabled={isDownloading || isGenerating}
-          >
-            <Download className="h-4 w-4" />
-            {isDownloading ? "Downloading..." : "Download PDF"}
-          </Button>
-        </div>
-
-        {/* Progress Indicator untuk PDF Download */}
-        {isDownloading && (
-          <div className="space-y-2 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-            <div className="flex items-center gap-2">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-              <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
-                Sedang membuat PDF...
-              </p>
-            </div>
-            <p className="text-xs text-blue-600 dark:text-blue-400">
-              Mohon tunggu, proses ini mungkin memakan waktu beberapa detik
-            </p>
-          </div>
-        )}
-
-        {/* Progress Indicator untuk Generate Document */}
-        {isGenerating && (
-          <div className="space-y-2 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-            <div className="flex items-center gap-2">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600"></div>
-              <p className="text-sm text-green-700 dark:text-green-300 font-medium">
-                Menyimpan dokumen ke database...
-              </p>
-            </div>
-            <p className="text-xs text-green-600 dark:text-green-400">
-              Dokumen sedang diproses dan disimpan
-            </p>
-          </div>
-        )}
       </div>
     );
   };
@@ -2789,13 +2970,6 @@ export default function SuratKuasaKhususPage() {
           return !!selectedClientId && !!selectedDebtId;
         case 4: // Untuk ke step 4, harus ada client, debt, dan document number
           return !!selectedClientId && !!selectedDebtId && !!documentNumber;
-        case 5: // Untuk ke step 5, harus ada template
-          return (
-            !!selectedClientId &&
-            !!selectedDebtId &&
-            !!documentNumber &&
-            !!selectedTemplateId
-          );
         default:
           return true;
       }
@@ -2806,8 +2980,6 @@ export default function SuratKuasaKhususPage() {
       if (step === 2 && !selectedDebtId) return "Pilih hutang terlebih dahulu";
       if (step === 3 && !documentNumber)
         return "Nomor dokumen belum ter-generate";
-      if (step === 4 && !selectedTemplateId)
-        return "Pilih template terlebih dahulu";
       return "";
     };
 
@@ -3361,7 +3533,7 @@ export default function SuratKuasaKhususPage() {
               {/* Progress Summary Card */}
               <Card className="mb-6 border-l-4 border-l-blue-500">
                 <CardContent className="p-4">
-                  <div className="grid grid-cols-2 md:grid-cols-6 gap-4 text-center">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
                     <div
                       className={`p-2 rounded ${
                         selectedClientId
@@ -3428,38 +3600,6 @@ export default function SuratKuasaKhususPage() {
                       </div>
                       <div className="text-xs font-medium">Template</div>
                     </div>
-                    <div
-                      className={`p-2 rounded ${
-                        step >= 5
-                          ? "bg-green-50 dark:bg-green-900/20"
-                          : "bg-gray-50 dark:bg-gray-800"
-                      }`}
-                    >
-                      <div
-                        className={`text-xl ${
-                          step >= 5 ? "text-green-600" : "text-gray-400"
-                        }`}
-                      >
-                        {step >= 5 ? "✅" : "⏳"}
-                      </div>
-                      <div className="text-xs font-medium">Review</div>
-                    </div>
-                    <div
-                      className={`p-2 rounded ${
-                        step >= 6
-                          ? "bg-green-50 dark:bg-green-900/20"
-                          : "bg-gray-50 dark:bg-gray-800"
-                      }`}
-                    >
-                      <div
-                        className={`text-xl ${
-                          step >= 6 ? "text-green-600" : "text-gray-400"
-                        }`}
-                      >
-                        {step >= 6 ? "✅" : "⏳"}
-                      </div>
-                      <div className="text-xs font-medium">Generate</div>
-                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -3480,7 +3620,6 @@ export default function SuratKuasaKhususPage() {
                   {step === 2 && renderStep2()}
                   {step === 3 && renderStep3()}
                   {step === 4 && renderStep4()}
-                  {step === 5 && renderStep5()}
 
                   {renderNavigation()}
                 </CardContent>
@@ -3606,6 +3745,123 @@ export default function SuratKuasaKhususPage() {
                       }
                     >
                       Hapus
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              {/* Document Preview Dialog */}
+              <Dialog
+                open={showDocumentPreview}
+                onOpenChange={setShowDocumentPreview}
+              >
+                <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle className="dark:text-gray-200 flex items-center gap-2">
+                      <Eye className="h-5 w-5" />
+                      Preview Dokumen Surat Kuasa Khusus
+                    </DialogTitle>
+                    <DialogDescription className="dark:text-gray-400">
+                      Preview dokumen dengan format HTML sesuai rich text
+                      editor. Anda dapat menyimpan ke database dan download PDF
+                      dari sini.
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="space-y-4">
+                    {/* Document Info */}
+                    <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg text-sm">
+                      <div>
+                        <strong>Nomor Dokumen:</strong> {documentNumber}
+                      </div>
+                      <div>
+                        <strong>Klien:</strong>{" "}
+                        {selectedClient?.personalData.namaLengkap}
+                      </div>
+                      <div>
+                        <strong>Jenis Hutang:</strong>{" "}
+                        {selectedDebt?.jenisHutang}
+                      </div>
+                      <div>
+                        <strong>Bank/Provider:</strong>{" "}
+                        {selectedDebt?.bankProvider}
+                      </div>
+                    </div>
+
+                    {/* Preview Content */}
+                    <div className="border rounded-lg p-6 bg-white dark:bg-gray-900 dark:border-gray-700 max-h-96 overflow-y-auto">
+                      <div className="text-sm text-gray-500 dark:text-gray-400 mb-4 border-b pb-2">
+                        Preview Dokumen (Format HTML):
+                      </div>
+                      <div
+                        className="prose prose-sm max-w-none dark:prose-invert dark:text-gray-200"
+                        style={{
+                          fontFamily: "Arial, sans-serif",
+                          fontSize: "14px",
+                          lineHeight: "1.6",
+                          color: "#000",
+                        }}
+                        dangerouslySetInnerHTML={{
+                          __html: previewContent || "",
+                        }}
+                      />
+                    </div>
+
+                    {/* Loading States */}
+                    {isGenerating && (
+                      <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                        <div className="flex items-center gap-2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                          <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
+                            Menyimpan dokumen ke database...
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {isDownloading && (
+                      <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                        <div className="flex items-center gap-2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600"></div>
+                          <p className="text-sm text-green-700 dark:text-green-300 font-medium">
+                            Membuat PDF...
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <DialogFooter className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowDocumentPreview(false)}
+                      disabled={isGenerating || isDownloading}
+                    >
+                      Tutup
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={handleDownloadPDFFromPreviewOnly}
+                      disabled={
+                        isGenerating || isDownloading || !previewContent
+                      }
+                      className="flex items-center gap-2"
+                    >
+                      <Download className="h-4 w-4" />
+                      {isDownloading ? "Downloading..." : "Download PDF Saja"}
+                    </Button>
+                    <Button
+                      onClick={handleSaveAndDownloadPDFFromPreview}
+                      disabled={
+                        isGenerating || isDownloading || !previewContent
+                      }
+                      className="flex items-center gap-2"
+                    >
+                      <Save className="h-4 w-4 mr-2" />
+                      <Download className="h-4 w-4" />
+                      {isGenerating || isDownloading
+                        ? "Processing..."
+                        : "Simpan & Download PDF"}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
