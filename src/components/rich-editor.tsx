@@ -22,6 +22,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
+import {
   Bold,
   Italic,
   Underline as UnderlineIcon,
@@ -47,6 +61,11 @@ import {
   Eye,
   Copy,
   Download,
+  Heading,
+  Variable,
+  ChevronDown,
+  Palette,
+  Plus,
 } from "lucide-react";
 
 interface RichEditorProps {
@@ -58,6 +77,8 @@ interface RichEditorProps {
   showToolbar?: boolean;
   showSourceCode?: boolean;
   minHeight?: string;
+  variables?: Array<{ key: string; value: string; description?: string }>;
+  onVariableInsert?: (variable: string) => void;
 }
 
 const RichEditor: React.FC<RichEditorProps> = ({
@@ -69,6 +90,8 @@ const RichEditor: React.FC<RichEditorProps> = ({
   showToolbar = true,
   showSourceCode = true,
   minHeight = "300px",
+  variables = [],
+  onVariableInsert,
 }) => {
   const isClient = useIsClient();
 
@@ -162,14 +185,45 @@ const RichEditor: React.FC<RichEditorProps> = ({
       .run();
   }, [editor]);
 
+  const insertVariable = useCallback(
+    (variableKey: string) => {
+      if (!editor) return;
+
+      editor.chain().focus().insertContent(variableKey).run();
+      onVariableInsert?.(variableKey);
+    },
+    [editor, onVariableInsert]
+  );
+
+  const insertHeading = useCallback(
+    (level: number) => {
+      if (!editor) return;
+
+      editor
+        .chain()
+        .focus()
+        .toggleHeading({ level: level as 1 | 2 | 3 | 4 | 5 | 6 })
+        .run();
+    },
+    [editor]
+  );
+
+  const setHighlightColor = useCallback(
+    (color: string) => {
+      if (!editor) return;
+
+      editor.chain().focus().toggleHighlight({ color }).run();
+    },
+    [editor]
+  );
+
   const copyToClipboard = useCallback(async () => {
     if (!editor) return;
 
     const html = editor.getHTML();
     try {
       await navigator.clipboard.writeText(html);
-    } catch (err) {
-    }
+    } catch (err) {}
   }, [editor]);
 
   const downloadAsHtml = useCallback(() => {
@@ -218,186 +272,524 @@ const RichEditor: React.FC<RichEditorProps> = ({
   }
 
   const toolbarContent = showToolbar && (
-    <div className="border-b p-2 flex flex-wrap gap-1 items-center">
-      {/* Undo/Redo */}
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => editor.chain().focus().undo().run()}
-        disabled={!editor.can().undo()}
-      >
-        <Undo className="w-4 h-4" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => editor.chain().focus().redo().run()}
-        disabled={!editor.can().redo()}
-      >
-        <Redo className="w-4 h-4" />
-      </Button>
+    <TooltipProvider>
+      <div className="border-b p-3 bg-gray-50 dark:bg-gray-800/50">
+        <div className="flex flex-wrap gap-1 items-center">
+          {/* Undo/Redo */}
+          <div className="flex items-center gap-1 mr-2">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => editor.chain().focus().undo().run()}
+                  disabled={!editor.can().undo()}
+                  className="h-8 w-8 p-0"
+                >
+                  <Undo className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Undo (Ctrl+Z)</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => editor.chain().focus().redo().run()}
+                  disabled={!editor.can().redo()}
+                  className="h-8 w-8 p-0"
+                >
+                  <Redo className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Redo (Ctrl+Y)</TooltipContent>
+            </Tooltip>
+          </div>
 
-      <Separator orientation="vertical" className="h-6 mx-1" />
+          <Separator orientation="vertical" className="h-6 mx-1" />
 
-      {/* Text Formatting */}
-      <Button
-        variant={editor.isActive("bold") ? "default" : "ghost"}
-        size="sm"
-        onClick={() => editor.chain().focus().toggleBold().run()}
-      >
-        <Bold className="w-4 h-4" />
-      </Button>
-      <Button
-        variant={editor.isActive("italic") ? "default" : "ghost"}
-        size="sm"
-        onClick={() => editor.chain().focus().toggleItalic().run()}
-      >
-        <Italic className="w-4 h-4" />
-      </Button>
-      <Button
-        variant={editor.isActive("underline") ? "default" : "ghost"}
-        size="sm"
-        onClick={() => editor.chain().focus().toggleUnderline().run()}
-      >
-        <UnderlineIcon className="w-4 h-4" />
-      </Button>
-      <Button
-        variant={editor.isActive("strike") ? "default" : "ghost"}
-        size="sm"
-        onClick={() => editor.chain().focus().toggleStrike().run()}
-      >
-        <Strikethrough className="w-4 h-4" />
-      </Button>
-      <Button
-        variant={editor.isActive("highlight") ? "default" : "ghost"}
-        size="sm"
-        onClick={() => editor.chain().focus().toggleHighlight().run()}
-      >
-        <Highlighter className="w-4 h-4" />
-      </Button>
+          {/* Headings Dropdown */}
+          <DropdownMenu>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-8 px-2">
+                    <Heading className="w-4 h-4 mr-1" />
+                    <ChevronDown className="w-3 h-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent>Heading Styles</TooltipContent>
+            </Tooltip>
+            <DropdownMenuContent align="start">
+              <DropdownMenuLabel>Heading Styles</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => editor.chain().focus().setParagraph().run()}
+                className={
+                  editor.isActive("paragraph")
+                    ? "bg-gray-100 dark:bg-gray-700"
+                    : ""
+                }
+              >
+                Normal Text
+              </DropdownMenuItem>
+              {[1, 2, 3, 4, 5, 6].map((level) => (
+                <DropdownMenuItem
+                  key={level}
+                  onClick={() => insertHeading(level)}
+                  className={
+                    editor.isActive("heading", { level })
+                      ? "bg-gray-100 dark:bg-gray-700"
+                      : ""
+                  }
+                >
+                  <span
+                    className={`font-bold ${
+                      level <= 2
+                        ? "text-lg"
+                        : level <= 4
+                        ? "text-base"
+                        : "text-sm"
+                    }`}
+                  >
+                    Heading {level}
+                  </span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-      <Separator orientation="vertical" className="h-6 mx-1" />
+          <Separator orientation="vertical" className="h-6 mx-1" />
 
-      {/* Subscript/Superscript */}
-      <Button
-        variant={editor.isActive("subscript") ? "default" : "ghost"}
-        size="sm"
-        onClick={() => editor.chain().focus().toggleSubscript().run()}
-      >
-        <SubscriptIcon className="w-4 h-4" />
-      </Button>
-      <Button
-        variant={editor.isActive("superscript") ? "default" : "ghost"}
-        size="sm"
-        onClick={() => editor.chain().focus().toggleSuperscript().run()}
-      >
-        <SuperscriptIcon className="w-4 h-4" />
-      </Button>
+          {/* Text Formatting */}
+          <div className="flex items-center gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={editor.isActive("bold") ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => editor.chain().focus().toggleBold().run()}
+                  className="h-8 w-8 p-0"
+                >
+                  <Bold className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Bold (Ctrl+B)</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={editor.isActive("italic") ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => editor.chain().focus().toggleItalic().run()}
+                  className="h-8 w-8 p-0"
+                >
+                  <Italic className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Italic (Ctrl+I)</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={editor.isActive("underline") ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => editor.chain().focus().toggleUnderline().run()}
+                  className="h-8 w-8 p-0"
+                >
+                  <UnderlineIcon className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Underline (Ctrl+U)</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={editor.isActive("strike") ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => editor.chain().focus().toggleStrike().run()}
+                  className="h-8 w-8 p-0"
+                >
+                  <Strikethrough className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Strikethrough</TooltipContent>
+            </Tooltip>
 
-      <Separator orientation="vertical" className="h-6 mx-1" />
+            {/* Highlight with color options */}
+            <DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant={
+                        editor.isActive("highlight") ? "default" : "ghost"
+                      }
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                    >
+                      <Highlighter className="w-4 h-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent>Highlight Text</TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent align="start">
+                <DropdownMenuLabel>Highlight Colors</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => editor.chain().focus().toggleHighlight().run()}
+                >
+                  <div className="w-4 h-4 bg-yellow-200 rounded mr-2"></div>
+                  Yellow (Default)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setHighlightColor("#fca5a5")}>
+                  <div className="w-4 h-4 bg-red-300 rounded mr-2"></div>
+                  Red
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setHighlightColor("#86efac")}>
+                  <div className="w-4 h-4 bg-green-300 rounded mr-2"></div>
+                  Green
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setHighlightColor("#93c5fd")}>
+                  <div className="w-4 h-4 bg-blue-300 rounded mr-2"></div>
+                  Blue
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => editor.chain().focus().unsetHighlight().run()}
+                >
+                  Remove Highlight
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
 
-      {/* Alignment */}
-      <Button
-        variant={editor.isActive({ textAlign: "left" }) ? "default" : "ghost"}
-        size="sm"
-        onClick={() => editor.chain().focus().setTextAlign("left").run()}
-      >
-        <AlignLeft className="w-4 h-4" />
-      </Button>
-      <Button
-        variant={editor.isActive({ textAlign: "center" }) ? "default" : "ghost"}
-        size="sm"
-        onClick={() => editor.chain().focus().setTextAlign("center").run()}
-      >
-        <AlignCenter className="w-4 h-4" />
-      </Button>
-      <Button
-        variant={editor.isActive({ textAlign: "right" }) ? "default" : "ghost"}
-        size="sm"
-        onClick={() => editor.chain().focus().setTextAlign("right").run()}
-      >
-        <AlignRight className="w-4 h-4" />
-      </Button>
-      <Button
-        variant={
-          editor.isActive({ textAlign: "justify" }) ? "default" : "ghost"
-        }
-        size="sm"
-        onClick={() => editor.chain().focus().setTextAlign("justify").run()}
-      >
-        <AlignJustify className="w-4 h-4" />
-      </Button>
+          <Separator orientation="vertical" className="h-6 mx-1" />
 
-      <Separator orientation="vertical" className="h-6 mx-1" />
+          {/* Subscript/Superscript */}
+          <div className="flex items-center gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={editor.isActive("subscript") ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => editor.chain().focus().toggleSubscript().run()}
+                  className="h-8 w-8 p-0"
+                >
+                  <SubscriptIcon className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Subscript</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={editor.isActive("superscript") ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() =>
+                    editor.chain().focus().toggleSuperscript().run()
+                  }
+                  className="h-8 w-8 p-0"
+                >
+                  <SuperscriptIcon className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Superscript</TooltipContent>
+            </Tooltip>
+          </div>
 
-      {/* Lists */}
-      <Button
-        variant={editor.isActive("bulletList") ? "default" : "ghost"}
-        size="sm"
-        onClick={() => editor.chain().focus().toggleBulletList().run()}
-      >
-        <List className="w-4 h-4" />
-      </Button>
-      <Button
-        variant={editor.isActive("orderedList") ? "default" : "ghost"}
-        size="sm"
-        onClick={() => editor.chain().focus().toggleOrderedList().run()}
-      >
-        <ListOrdered className="w-4 h-4" />
-      </Button>
+          <Separator orientation="vertical" className="h-6 mx-1" />
 
-      <Separator orientation="vertical" className="h-6 mx-1" />
+          {/* Alignment */}
+          <div className="flex items-center gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={
+                    editor.isActive({ textAlign: "left" }) ? "default" : "ghost"
+                  }
+                  size="sm"
+                  onClick={() =>
+                    editor.chain().focus().setTextAlign("left").run()
+                  }
+                  className="h-8 w-8 p-0"
+                >
+                  <AlignLeft className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Align Left</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={
+                    editor.isActive({ textAlign: "center" })
+                      ? "default"
+                      : "ghost"
+                  }
+                  size="sm"
+                  onClick={() =>
+                    editor.chain().focus().setTextAlign("center").run()
+                  }
+                  className="h-8 w-8 p-0"
+                >
+                  <AlignCenter className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Align Center</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={
+                    editor.isActive({ textAlign: "right" })
+                      ? "default"
+                      : "ghost"
+                  }
+                  size="sm"
+                  onClick={() =>
+                    editor.chain().focus().setTextAlign("right").run()
+                  }
+                  className="h-8 w-8 p-0"
+                >
+                  <AlignRight className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Align Right</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={
+                    editor.isActive({ textAlign: "justify" })
+                      ? "default"
+                      : "ghost"
+                  }
+                  size="sm"
+                  onClick={() =>
+                    editor.chain().focus().setTextAlign("justify").run()
+                  }
+                  className="h-8 w-8 p-0"
+                >
+                  <AlignJustify className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Justify</TooltipContent>
+            </Tooltip>
+          </div>
 
-      {/* Quote and Code */}
-      <Button
-        variant={editor.isActive("blockquote") ? "default" : "ghost"}
-        size="sm"
-        onClick={() => editor.chain().focus().toggleBlockquote().run()}
-      >
-        <Quote className="w-4 h-4" />
-      </Button>
-      <Button
-        variant={editor.isActive("code") ? "default" : "ghost"}
-        size="sm"
-        onClick={() => editor.chain().focus().toggleCode().run()}
-      >
-        <Code className="w-4 h-4" />
-      </Button>
-      <Button
-        variant={editor.isActive("codeBlock") ? "default" : "ghost"}
-        size="sm"
-        onClick={() => editor.chain().focus().toggleCodeBlock().run()}
-      >
-        <Code2 className="w-4 h-4" />
-      </Button>
+          <Separator orientation="vertical" className="h-6 mx-1" />
 
-      <Separator orientation="vertical" className="h-6 mx-1" />
+          {/* Lists */}
+          <div className="flex items-center gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={editor.isActive("bulletList") ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() =>
+                    editor.chain().focus().toggleBulletList().run()
+                  }
+                  className="h-8 w-8 p-0"
+                >
+                  <List className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Bullet List</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={editor.isActive("orderedList") ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() =>
+                    editor.chain().focus().toggleOrderedList().run()
+                  }
+                  className="h-8 w-8 p-0"
+                >
+                  <ListOrdered className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Numbered List</TooltipContent>
+            </Tooltip>
+          </div>
 
-      {/* Link, Image, Table */}
-      <Button variant="ghost" size="sm" onClick={setLink}>
-        <LinkIcon className="w-4 h-4" />
-      </Button>
-      <Button variant="ghost" size="sm" onClick={addImage}>
-        <ImageIcon className="w-4 h-4" />
-      </Button>
-      <Button variant="ghost" size="sm" onClick={addTable}>
-        <TableIcon className="w-4 h-4" />
-      </Button>
+          <Separator orientation="vertical" className="h-6 mx-1" />
 
-      <Separator orientation="vertical" className="h-6 mx-1" />
+          {/* Quote and Code */}
+          <div className="flex items-center gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={editor.isActive("blockquote") ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() =>
+                    editor.chain().focus().toggleBlockquote().run()
+                  }
+                  className="h-8 w-8 p-0"
+                >
+                  <Quote className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Quote Block</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={editor.isActive("code") ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => editor.chain().focus().toggleCode().run()}
+                  className="h-8 w-8 p-0"
+                >
+                  <Code className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Inline Code</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={editor.isActive("codeBlock") ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+                  className="h-8 w-8 p-0"
+                >
+                  <Code2 className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Code Block</TooltipContent>
+            </Tooltip>
+          </div>
 
-      {/* Actions */}
-      <Button variant="ghost" size="sm" onClick={copyToClipboard}>
-        <Copy className="w-4 h-4" />
-      </Button>
-      <Button variant="ghost" size="sm" onClick={downloadAsHtml}>
-        <Download className="w-4 h-4" />
-      </Button>
-    </div>
+          <Separator orientation="vertical" className="h-6 mx-1" />
+
+          {/* Insert Elements */}
+          <div className="flex items-center gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={setLink}
+                  className="h-8 w-8 p-0"
+                >
+                  <LinkIcon className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Insert Link</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={addImage}
+                  className="h-8 w-8 p-0"
+                >
+                  <ImageIcon className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Insert Image</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={addTable}
+                  className="h-8 w-8 p-0"
+                >
+                  <TableIcon className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Insert Table</TooltipContent>
+            </Tooltip>
+          </div>
+
+          {/* Variables Dropdown */}
+          {variables.length > 0 && (
+            <>
+              <Separator orientation="vertical" className="h-6 mx-1" />
+              <DropdownMenu>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-8 px-2">
+                        <Variable className="w-4 h-4 mr-1" />
+                        <ChevronDown className="w-3 h-3" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent>Insert Variables</TooltipContent>
+                </Tooltip>
+                <DropdownMenuContent align="start" className="w-64">
+                  <DropdownMenuLabel>Available Variables</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {variables.map((variable, index) => (
+                    <DropdownMenuItem
+                      key={index}
+                      onClick={() => insertVariable(variable.key)}
+                      className="flex flex-col items-start gap-1 py-2"
+                    >
+                      <code className="text-xs text-blue-600 dark:text-blue-400 font-mono">
+                        {variable.key}
+                      </code>
+                      {variable.description && (
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                          {variable.description}
+                        </span>
+                      )}
+                      <span className="text-xs text-gray-400 dark:text-gray-500">
+                        Preview: {variable.value}
+                      </span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          )}
+
+          <Separator orientation="vertical" className="h-6 mx-1" />
+
+          {/* Actions */}
+          <div className="flex items-center gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={copyToClipboard}
+                  className="h-8 w-8 p-0"
+                >
+                  <Copy className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Copy HTML</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={downloadAsHtml}
+                  className="h-8 w-8 p-0"
+                >
+                  <Download className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Download as HTML</TooltipContent>
+            </Tooltip>
+          </div>
+        </div>
+      </div>
+    </TooltipProvider>
   );
 
   const editorContent = (
-    <div className="border rounded-lg overflow-hidden bg-background">
+    <div className="border rounded-lg overflow-hidden bg-background shadow-sm">
       {toolbarContent}
       <div
         className="relative bg-background cursor-text"
@@ -414,12 +806,20 @@ const RichEditor: React.FC<RichEditorProps> = ({
           className={`prose prose-sm max-w-none outline-none ${className}`}
           style={{
             minHeight,
-            padding: "16px",
+            padding: "20px",
             cursor: "text",
             fontSize: "14px",
-            lineHeight: "1.6",
+            lineHeight: "1.7",
+            fontFamily: "system-ui, -apple-system, sans-serif",
           }}
         />
+        {/* Floating help text */}
+        {editor && editor.isEmpty && (
+          <div className="absolute top-6 left-6 text-gray-400 dark:text-gray-500 pointer-events-none text-sm">
+            💡 Tips: Gunakan toolbar di atas untuk formatting, atau ketik "/"
+            untuk quick commands
+          </div>
+        )}
       </div>
     </div>
   );

@@ -15,6 +15,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Separator } from "@/components/ui/separator";
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
 import {
   collection,
   addDoc,
@@ -255,7 +261,10 @@ export default function CreateInvoicePage() {
                       type="number"
                       value={formData.jumlah}
                       onChange={(e) =>
-                        setFormData((f) => ({ ...f, jumlah: e.target.value }))
+                        setFormData((f) => ({
+                          ...f,
+                          jumlah: parseFloat(e.target.value) || 0,
+                        }))
                       }
                       required
                     />

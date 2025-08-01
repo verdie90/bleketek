@@ -67,7 +67,7 @@ export function ProtectedRoute({
 }
 
 // Higher-order component for protecting pages
-export function withAuth<T extends {}>(
+export function withAuth<T extends Record<string, unknown>>(
   Component: React.ComponentType<T>,
   options?: {
     requiredRole?: string;

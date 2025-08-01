@@ -90,6 +90,7 @@ interface BillingData {
 }
 
 interface JobData {
+  jenisPekerjaan: string;
   namaPerusahaan: string;
   jabatan: string;
   alamatKantor: string;
@@ -100,10 +101,10 @@ interface JobData {
 
 interface DebtEntry {
   id: string;
-  jenisHutang: string;
+  jenisHutang: "kartu-kredit" | "kta" | "pinjaman-online" | "";
   bankProvider: string;
   nomorKartuKontrak: string;
-  sisaHutang: string;
+  outstanding: string;
 }
 
 interface DebtData {
@@ -144,6 +145,7 @@ const INITIAL_FORM_DATA: ClientFormData = {
     billingMelaluiTagihan: "",
   },
   jobData: {
+    jenisPekerjaan: "",
     namaPerusahaan: "",
     jabatan: "",
     alamatKantor: "",
@@ -158,7 +160,7 @@ const INITIAL_FORM_DATA: ClientFormData = {
         jenisHutang: "",
         bankProvider: "",
         nomorKartuKontrak: "",
-        sisaHutang: "",
+        outstanding: "",
       },
     ],
   },
@@ -176,44 +178,45 @@ export default function ClientDataPage() {
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState<ClientFormData>(INITIAL_FORM_DATA);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [creditCardProviders, setCreditCardProviders] = useState<string[]>([
-    "BCA",
-    "Mandiri",
-    "BRI",
-    "BNI",
-    "CIMB Niaga",
-    "Danamon",
-    "Permata",
-  ]);
-  const [ktaProviders, setKtaProviders] = useState<string[]>([
-    "BCA",
-    "Mandiri",
-    "BRI",
-    "BNI",
-    "CIMB Niaga",
-    "Kredivo",
-  ]);
-  const [onlineLoanProviders, setOnlineLoanProviders] = useState<string[]>([
-    "Kredivo",
-    "Akulaku",
-    "Shopee PayLater",
-    "OVO PayLater",
-    "GoPay PayLater",
-  ]);
-  const [providersLoaded, setProvidersLoaded] = useState(true);
+  const [debtTypesData, setDebtTypesData] = useState<{
+    creditCards: Array<{ id: string; name: string; bankName?: string }>;
+    kta: Array<{ id: string; name: string; bankName?: string }>;
+    onlineLoans: Array<{ id: string; name: string; providerName?: string }>;
+  }>({
+    creditCards: [],
+    kta: [],
+    onlineLoans: [],
+  });
+  const [debtTypesLoading, setDebtTypesLoading] = useState(true);
 
   const progress = (currentStep / STEPS.length) * 100;
 
   // Fetch different provider types from Firestore
   useEffect(() => {
-    const fetchProviders = async () => {
-      setProvidersLoaded(false);
+    const fetchDebtTypes = async () => {
+      setDebtTypesLoading(true);
       try {
-        // Fetch Credit Card providers
-        const creditCardSnapshot = await getDocs(
-          collection(db, "credit_cards")
-        );
-        if (creditCardSnapshot.empty) {
+        // Fetch data from all three collections
+        const [ccSnap, ktaSnap, olSnap] = await Promise.all([
+          getDocs(collection(db, "credit_cards")),
+          getDocs(collection(db, "kta")),
+          getDocs(collection(db, "online_loans")),
+        ]);
+
+        // Process credit cards
+        let creditCards = ccSnap.docs
+          .filter((doc) => doc.data().isActive !== false)
+          .map((doc) => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              name: data.bankName || data.name || `Bank ${doc.id}`,
+              bankName: data.bankName,
+            };
+          });
+
+        // If no credit cards found, create default ones
+        if (creditCards.length === 0) {
           const defaultCreditCards = [
             "BCA",
             "Mandiri",
@@ -222,118 +225,93 @@ export default function ClientDataPage() {
             "CIMB Niaga",
             "Danamon",
             "Permata",
-            "BTPN",
-            "Maybank",
-            "OCBC NISP",
-            "Panin Bank",
-            "Bank Mega",
           ];
-          for (const provider of defaultCreditCards) {
-            await addDoc(collection(db, "credit_cards"), { name: provider });
-          }
-          setCreditCardProviders(defaultCreditCards);
-        } else {
-          const providers = creditCardSnapshot.docs.map(
-            (doc) => doc.data().name
-          );
-          setCreditCardProviders(providers);
+          creditCards = defaultCreditCards.map((name, index) => ({
+            id: `cc-${index}`,
+            name,
+            bankName: name,
+          }));
         }
 
-        // Fetch KTA providers
-        const ktaSnapshot = await getDocs(collection(db, "kta"));
-        if (ktaSnapshot.empty) {
+        // Process KTA
+        let kta = ktaSnap.docs
+          .filter((doc) => doc.data().isActive !== false)
+          .map((doc) => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              name: data.bankName || data.name || `Bank ${doc.id}`,
+              bankName: data.bankName,
+            };
+          });
+
+        // If no KTA found, create default ones
+        if (kta.length === 0) {
           const defaultKta = [
             "BCA",
             "Mandiri",
             "BRI",
             "BNI",
             "CIMB Niaga",
-            "Danamon",
-            "Permata",
-            "BTPN",
-            "Maybank",
-            "OCBC NISP",
-            "Panin Bank",
-            "Bank Mega",
             "Kredivo",
           ];
-          for (const provider of defaultKta) {
-            await addDoc(collection(db, "kta"), { name: provider });
-          }
-          setKtaProviders(defaultKta);
-        } else {
-          const providers = ktaSnapshot.docs.map((doc) => doc.data().name);
-          setKtaProviders(providers);
+          kta = defaultKta.map((name, index) => ({
+            id: `kta-${index}`,
+            name,
+            bankName: name,
+          }));
         }
 
-        // Fetch Online Loan providers
-        const onlineLoanSnapshot = await getDocs(
-          collection(db, "online_loans")
-        );
-        if (onlineLoanSnapshot.empty) {
+        // Process online loans
+        let onlineLoans = olSnap.docs
+          .filter((doc) => doc.data().isActive !== false)
+          .map((doc) => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              name: data.providerName || data.name || `Provider ${doc.id}`,
+              providerName: data.providerName,
+            };
+          });
+
+        // If no online loans found, create default ones
+        if (onlineLoans.length === 0) {
           const defaultOnlineLoans = [
             "Kredivo",
             "Akulaku",
             "Shopee PayLater",
-            "Traveloka PayLater",
             "OVO PayLater",
             "GoPay PayLater",
-            "Dana",
-            "LinkAja",
-            "Julo",
-            "Tunaiku",
-            "KoinWorks",
-            "Modalku",
-            "Investree",
-            "Amartha",
           ];
-          for (const provider of defaultOnlineLoans) {
-            await addDoc(collection(db, "online_loans"), { name: provider });
-          }
-          setOnlineLoanProviders(defaultOnlineLoans);
-        } else {
-          const providers = onlineLoanSnapshot.docs.map(
-            (doc) => doc.data().name
-          );
-          setOnlineLoanProviders(providers);
+          onlineLoans = defaultOnlineLoans.map((name, index) => ({
+            id: `ol-${index}`,
+            name,
+            providerName: name,
+          }));
         }
 
-        setProvidersLoaded(true);
-      } catch (error) {
-        console.error("Error fetching providers:", error);
-        // Fallback data if Firestore fetch fails
-        const fallbackCreditCards = [
-          "BCA",
-          "Mandiri",
-          "BRI",
-          "BNI",
-          "CIMB Niaga",
-          "Danamon",
-          "Permata",
-        ];
-        const fallbackKta = [
-          "BCA",
-          "Mandiri",
-          "BRI",
-          "BNI",
-          "CIMB Niaga",
-          "Kredivo",
-        ];
-        const fallbackOnlineLoans = [
-          "Kredivo",
-          "Akulaku",
-          "Shopee PayLater",
-          "OVO PayLater",
-          "GoPay PayLater",
-        ];
+        setDebtTypesData({
+          creditCards,
+          kta,
+          onlineLoans,
+        });
 
-        setCreditCardProviders(fallbackCreditCards);
-        setKtaProviders(fallbackKta);
-        setOnlineLoanProviders(fallbackOnlineLoans);
-        setProvidersLoaded(true);
+        setDebtTypesLoading(false);
+      } catch (error) {
+        console.error("Error fetching debt types:", error);
+        toast.error("Gagal memuat data jenis hutang dari database");
+        setDebtTypesLoading(false);
+
+        // Set empty arrays for error state
+        setDebtTypesData({
+          creditCards: [],
+          kta: [],
+          onlineLoans: [],
+        });
       }
     };
-    fetchProviders();
+
+    fetchDebtTypes();
   }, []);
 
   // Validation functions
@@ -385,16 +363,14 @@ export default function ClientDataPage() {
           formData.billingData.billingMelaluiTagihan
         );
       case 4:
-        return !!(
-          formData.jobData.namaPerusahaan && formData.jobData.alamatKantor
-        );
+        return !!formData.jobData.jenisPekerjaan;
       case 5:
         return formData.debtData.debts.every(
           (debt) =>
             debt.jenisHutang &&
             debt.bankProvider &&
             debt.nomorKartuKontrak &&
-            debt.sisaHutang
+            debt.outstanding
         );
       default:
         return true;
@@ -551,7 +527,7 @@ export default function ClientDataPage() {
             yPosition
           );
           yPosition += 7;
-          doc.text(`   Sisa Hutang: Rp ${debt.sisaHutang}`, 20, yPosition);
+          doc.text(`   Sisa Hutang: Rp ${debt.outstanding}`, 20, yPosition);
           yPosition += 10;
         }
       });
@@ -596,7 +572,7 @@ export default function ClientDataPage() {
           <Label htmlFor="namaLengkap">Nama Lengkap (sesuai KTP) *</Label>
           <Input
             id="namaLengkap"
-            value={formData.personalData.namaLengkap}
+            value={formData.personalData.namaLengkap || ""}
             onChange={(e) =>
               updateFormData("personalData", { namaLengkap: e.target.value })
             }
@@ -608,7 +584,7 @@ export default function ClientDataPage() {
           <Label htmlFor="nik">NIK *</Label>
           <Input
             id="nik"
-            value={formData.personalData.nik}
+            value={formData.personalData.nik || ""}
             onChange={(e) => {
               const value = e.target.value.replace(/[^\d]/g, ""); // Only numbers
               if (value.length <= 16) {
@@ -631,7 +607,7 @@ export default function ClientDataPage() {
           <Label htmlFor="tempatLahir">Tempat Lahir *</Label>
           <Input
             id="tempatLahir"
-            value={formData.personalData.tempatLahir}
+            value={formData.personalData.tempatLahir || ""}
             onChange={(e) =>
               updateFormData("personalData", { tempatLahir: e.target.value })
             }
@@ -644,7 +620,7 @@ export default function ClientDataPage() {
           <Input
             id="tanggalLahir"
             type="date"
-            value={formData.personalData.tanggalLahir}
+            value={formData.personalData.tanggalLahir || ""}
             onChange={(e) =>
               updateFormData("personalData", { tanggalLahir: e.target.value })
             }
@@ -657,7 +633,7 @@ export default function ClientDataPage() {
         <div className="space-y-2">
           <Label htmlFor="jenisKelamin">Jenis Kelamin *</Label>
           <Select
-            value={formData.personalData.jenisKelamin}
+            value={formData.personalData.jenisKelamin || ""}
             onValueChange={(value) =>
               updateFormData("personalData", { jenisKelamin: value })
             }
@@ -674,7 +650,7 @@ export default function ClientDataPage() {
         <div className="space-y-2">
           <Label htmlFor="statusPerkawinan">Status Perkawinan *</Label>
           <Select
-            value={formData.personalData.statusPerkawinan}
+            value={formData.personalData.statusPerkawinan || ""}
             onValueChange={(value) =>
               updateFormData("personalData", { statusPerkawinan: value })
             }
@@ -696,7 +672,7 @@ export default function ClientDataPage() {
         <Label htmlFor="namaIbuKandung">Nama Ibu Kandung *</Label>
         <Input
           id="namaIbuKandung"
-          value={formData.personalData.namaIbuKandung}
+          value={formData.personalData.namaIbuKandung || ""}
           onChange={(e) =>
             updateFormData("personalData", { namaIbuKandung: e.target.value })
           }
@@ -714,7 +690,7 @@ export default function ClientDataPage() {
           <Label htmlFor="noTelepon">No. Telepon *</Label>
           <Input
             id="noTelepon"
-            value={formData.contactData.noTelepon}
+            value={formData.contactData.noTelepon || ""}
             onChange={(e) => {
               const value = e.target.value.replace(/[^\d]/g, ""); // Only numbers
               updateFormData("contactData", { noTelepon: value });
@@ -734,7 +710,7 @@ export default function ClientDataPage() {
           <Input
             id="email"
             type="email"
-            value={formData.contactData.email}
+            value={formData.contactData.email || ""}
             onChange={(e) =>
               updateFormData("contactData", { email: e.target.value })
             }
@@ -748,7 +724,7 @@ export default function ClientDataPage() {
           <Label htmlFor="provinsi">Provinsi *</Label>
           <Input
             id="provinsi"
-            value={formData.contactData.provinsi}
+            value={formData.contactData.provinsi || ""}
             onChange={(e) =>
               updateFormData("contactData", { provinsi: e.target.value })
             }
@@ -760,7 +736,7 @@ export default function ClientDataPage() {
           <Label htmlFor="kotaKabupaten">Kota/Kabupaten *</Label>
           <Input
             id="kotaKabupaten"
-            value={formData.contactData.kotaKabupaten}
+            value={formData.contactData.kotaKabupaten || ""}
             onChange={(e) =>
               updateFormData("contactData", { kotaKabupaten: e.target.value })
             }
@@ -775,7 +751,7 @@ export default function ClientDataPage() {
           <Label htmlFor="kecamatan">Kecamatan *</Label>
           <Input
             id="kecamatan"
-            value={formData.contactData.kecamatan}
+            value={formData.contactData.kecamatan || ""}
             onChange={(e) =>
               updateFormData("contactData", { kecamatan: e.target.value })
             }
@@ -787,7 +763,7 @@ export default function ClientDataPage() {
           <Label htmlFor="kelurahanDesa">Kelurahan/Desa *</Label>
           <Input
             id="kelurahanDesa"
-            value={formData.contactData.kelurahanDesa}
+            value={formData.contactData.kelurahanDesa || ""}
             onChange={(e) =>
               updateFormData("contactData", { kelurahanDesa: e.target.value })
             }
@@ -801,7 +777,7 @@ export default function ClientDataPage() {
         <Label htmlFor="rtRw">RT/RW *</Label>
         <Input
           id="rtRw"
-          value={formData.contactData.rtRw}
+          value={formData.contactData.rtRw || ""}
           onChange={(e) =>
             updateFormData("contactData", { rtRw: e.target.value })
           }
@@ -814,7 +790,7 @@ export default function ClientDataPage() {
         <Label htmlFor="alamat">Alamat Lengkap *</Label>
         <Textarea
           id="alamat"
-          value={formData.contactData.alamat}
+          value={formData.contactData.alamat || ""}
           onChange={(e) =>
             updateFormData("contactData", { alamat: e.target.value })
           }
@@ -859,7 +835,7 @@ export default function ClientDataPage() {
       <div className="space-y-2">
         <Label htmlFor="terimaBillingTagihan">Terima Billing Tagihan *</Label>
         <Select
-          value={formData.billingData.terimaBillingTagihan}
+          value={formData.billingData.terimaBillingTagihan || ""}
           onValueChange={(value) =>
             updateFormData("billingData", { terimaBillingTagihan: value })
           }
@@ -880,7 +856,7 @@ export default function ClientDataPage() {
       <div className="space-y-2">
         <Label htmlFor="billingMelaluiTagihan">Billing Melalui *</Label>
         <Select
-          value={formData.billingData.billingMelaluiTagihan}
+          value={formData.billingData.billingMelaluiTagihan || ""}
           onValueChange={(value) =>
             updateFormData("billingData", { billingMelaluiTagihan: value })
           }
@@ -902,24 +878,57 @@ export default function ClientDataPage() {
 
   const renderJobDataStep = () => (
     <div className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="jenisPekerjaan">Jenis Pekerjaan *</Label>
+        <Select
+          value={formData.jobData.jenisPekerjaan || ""}
+          onValueChange={(value) =>
+            updateFormData("jobData", { jenisPekerjaan: value })
+          }
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Pilih jenis pekerjaan" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="karyawan-swasta">Karyawan Swasta</SelectItem>
+            <SelectItem value="pegawai-negeri">
+              Pegawai Negeri Sipil (PNS)
+            </SelectItem>
+            <SelectItem value="tni-polri">TNI/POLRI</SelectItem>
+            <SelectItem value="bumn-bumd">BUMN/BUMD</SelectItem>
+            <SelectItem value="wiraswasta">Wiraswasta/Pengusaha</SelectItem>
+            <SelectItem value="freelancer">Freelancer</SelectItem>
+            <SelectItem value="buruh-harian">Buruh Harian</SelectItem>
+            <SelectItem value="petani">Petani</SelectItem>
+            <SelectItem value="nelayan">Nelayan</SelectItem>
+            <SelectItem value="pedagang">Pedagang</SelectItem>
+            <SelectItem value="driver">Driver/Supir</SelectItem>
+            <SelectItem value="ibu-rumah-tangga">Ibu Rumah Tangga</SelectItem>
+            <SelectItem value="pelajar-mahasiswa">Pelajar/Mahasiswa</SelectItem>
+            <SelectItem value="pensiunan">Pensiunan</SelectItem>
+            <SelectItem value="tidak-bekerja">Tidak Bekerja</SelectItem>
+            <SelectItem value="lainnya">Lainnya</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="namaPerusahaan">Nama Perusahaan *</Label>
+          <Label htmlFor="namaPerusahaan">Nama Perusahaan (opsional)</Label>
           <Input
             id="namaPerusahaan"
-            value={formData.jobData.namaPerusahaan}
+            value={formData.jobData.namaPerusahaan || ""}
             onChange={(e) =>
               updateFormData("jobData", { namaPerusahaan: e.target.value })
             }
             placeholder="Masukkan nama perusahaan"
-            required
           />
         </div>
         <div className="space-y-2">
           <Label htmlFor="jabatan">Jabatan (opsional)</Label>
           <Input
             id="jabatan"
-            value={formData.jobData.jabatan}
+            value={formData.jobData.jabatan || ""}
             onChange={(e) =>
               updateFormData("jobData", { jabatan: e.target.value })
             }
@@ -929,16 +938,15 @@ export default function ClientDataPage() {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="alamatKantor">Alamat Kantor *</Label>
+        <Label htmlFor="alamatKantor">Alamat Kantor (opsional)</Label>
         <Textarea
           id="alamatKantor"
-          value={formData.jobData.alamatKantor}
+          value={formData.jobData.alamatKantor || ""}
           onChange={(e) =>
             updateFormData("jobData", { alamatKantor: e.target.value })
           }
           placeholder="Masukkan alamat kantor"
           rows={3}
-          required
         />
       </div>
 
@@ -946,7 +954,7 @@ export default function ClientDataPage() {
         <Label htmlFor="noTelpKantor">No. Telepon Kantor (opsional)</Label>
         <Input
           id="noTelpKantor"
-          value={formData.jobData.noTelpKantor}
+          value={formData.jobData.noTelpKantor || ""}
           onChange={(e) =>
             updateFormData("jobData", { noTelpKantor: e.target.value })
           }
@@ -963,7 +971,7 @@ export default function ClientDataPage() {
             <Label htmlFor="namaKontakDarurat">Nama Kontak Darurat</Label>
             <Input
               id="namaKontakDarurat"
-              value={formData.jobData.namaKontakDarurat}
+              value={formData.jobData.namaKontakDarurat || ""}
               onChange={(e) =>
                 updateFormData("jobData", { namaKontakDarurat: e.target.value })
               }
@@ -973,7 +981,7 @@ export default function ClientDataPage() {
           <div className="space-y-2">
             <Label htmlFor="hubunganKontakDarurat">Hubungan</Label>
             <Select
-              value={formData.jobData.hubunganKontakDarurat}
+              value={formData.jobData.hubunganKontakDarurat || ""}
               onValueChange={(value) =>
                 updateFormData("jobData", { hubunganKontakDarurat: value })
               }
@@ -1006,7 +1014,7 @@ export default function ClientDataPage() {
         jenisHutang: "",
         bankProvider: "",
         nomorKartuKontrak: "",
-        sisaHutang: "",
+        outstanding: "",
       };
       setFormData((prev) => ({
         ...prev,
@@ -1037,7 +1045,11 @@ export default function ClientDataPage() {
             if (debt.id === id) {
               // Jika jenisHutang berubah, reset bankProvider
               if (field === "jenisHutang" && debt.jenisHutang !== value) {
-                return { ...debt, jenisHutang: value, bankProvider: "" };
+                return {
+                  ...debt,
+                  jenisHutang: value as DebtEntry["jenisHutang"],
+                  bankProvider: "",
+                };
               }
               return { ...debt, [field]: value };
             }
@@ -1047,17 +1059,27 @@ export default function ClientDataPage() {
       }));
     };
 
-    const getProvidersForDebtType = (jenisHutang: string): string[] => {
+    const getProvidersForDebtType = (jenisHutang: DebtEntry["jenisHutang"]) => {
+      let result: Array<{
+        id: string;
+        name: string;
+        bankName?: string;
+        providerName?: string;
+      }> = [];
       switch (jenisHutang) {
         case "kartu-kredit":
-          return creditCardProviders;
+          result = debtTypesData.creditCards;
+          break;
         case "kta":
-          return ktaProviders;
+          result = debtTypesData.kta;
+          break;
         case "pinjaman-online":
-          return onlineLoanProviders;
+          result = debtTypesData.onlineLoans;
+          break;
         default:
-          return [];
+          result = [];
       }
+      return result;
     };
 
     return (
@@ -1087,8 +1109,11 @@ export default function ClientDataPage() {
                   <Label htmlFor={`jenisHutang-${debt.id}`}>
                     Jenis Hutang *
                   </Label>
+                  <span className="text-xs text-muted-foreground">
+                    Pilih tipe hutang (Kartu Kredit, KTA, atau Pinjaman Online).
+                  </span>
                   <Select
-                    value={debt.jenisHutang}
+                    value={debt.jenisHutang || ""}
                     onValueChange={(value) =>
                       updateDebtEntry(debt.id, "jenisHutang", value)
                     }
@@ -1121,7 +1146,14 @@ export default function ClientDataPage() {
                   </Select>
                   {debt.jenisHutang && (
                     <p className="text-xs text-green-600">
-                      ✓ Jenis hutang dipilih
+                      ✓ Jenis hutang dipilih:{" "}
+                      {debt.jenisHutang === "kartu-kredit"
+                        ? "Kartu Kredit"
+                        : debt.jenisHutang === "kta"
+                        ? "KTA"
+                        : debt.jenisHutang === "pinjaman-online"
+                        ? "Pinjaman Online"
+                        : ""}
                     </p>
                   )}
                 </div>
@@ -1130,48 +1162,66 @@ export default function ClientDataPage() {
                   <Label htmlFor={`bankProvider-${debt.id}`}>
                     Bank/Provider *
                   </Label>
+                  <span className="text-xs text-muted-foreground">
+                    Pilih bank atau provider sesuai jenis hutang.
+                  </span>
                   <Select
-                    value={debt.bankProvider}
+                    value={debt.bankProvider || ""}
                     onValueChange={(value) =>
                       updateDebtEntry(debt.id, "bankProvider", value)
                     }
-                    disabled={!debt.jenisHutang || !providersLoaded}
+                    disabled={!debt.jenisHutang || debtTypesLoading}
                   >
                     <SelectTrigger
                       className={debt.bankProvider ? "border-green-200" : ""}
                     >
                       <SelectValue
                         placeholder={
-                          !providersLoaded
-                            ? "Loading providers..."
+                          debtTypesLoading
+                            ? "Memuat data..."
                             : !debt.jenisHutang
                             ? "Pilih jenis hutang terlebih dahulu"
                             : providers.length === 0
-                            ? `No providers available for ${debt.jenisHutang}`
+                            ? `Tidak ada data untuk ${
+                                debt.jenisHutang === "kartu-kredit"
+                                  ? "kartu kredit"
+                                  : debt.jenisHutang === "kta"
+                                  ? "KTA"
+                                  : debt.jenisHutang === "pinjaman-online"
+                                  ? "pinjaman online"
+                                  : ""
+                              }`
                             : "Pilih bank/provider"
                         }
                       />
                     </SelectTrigger>
                     <SelectContent>
-                      {!providersLoaded ? (
+                      {debtTypesLoading ? (
                         <SelectItem value="loading" disabled>
-                          Loading providers...
+                          Memuat data...
                         </SelectItem>
                       ) : !debt.jenisHutang ? (
                         <SelectItem value="no-type" disabled>
                           Pilih jenis hutang terlebih dahulu
                         </SelectItem>
                       ) : providers.length === 0 ? (
-                        <SelectItem value="no-providers" disabled>
-                          No providers available for {debt.jenisHutang}
+                        <SelectItem value="no-data" disabled>
+                          Tidak ada data untuk{" "}
+                          {debt.jenisHutang === "kartu-kredit"
+                            ? "kartu kredit"
+                            : debt.jenisHutang === "kta"
+                            ? "KTA"
+                            : debt.jenisHutang === "pinjaman-online"
+                            ? "pinjaman online"
+                            : ""}
                         </SelectItem>
                       ) : (
                         providers.map((provider, providerIndex) => (
                           <SelectItem
-                            key={`${debt.id}-${debt.jenisHutang}-${provider}-${providerIndex}`}
-                            value={provider}
+                            key={`${debt.id}-${debt.jenisHutang}-${provider.id}-${providerIndex}`}
+                            value={provider.name}
                           >
-                            {provider}
+                            {provider.name}
                           </SelectItem>
                         ))
                       )}
@@ -1190,7 +1240,7 @@ export default function ClientDataPage() {
                   </Label>
                   <Input
                     id={`nomorKartuKontrak-${debt.id}`}
-                    value={debt.nomorKartuKontrak}
+                    value={debt.nomorKartuKontrak || ""}
                     onChange={(e) => {
                       // Allow numbers, spaces, and dashes for card/contract numbers
                       const value = e.target.value.replace(/[^0-9\s-]/g, "");
@@ -1235,13 +1285,13 @@ export default function ClientDataPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor={`sisaHutang-${debt.id}`}>
-                    Sisa Hutang (Rp) *
+                  <Label htmlFor={`outstanding-${debt.id}`}>
+                    Outstanding (Rp) *
                   </Label>
                   <Input
-                    id={`sisaHutang-${debt.id}`}
+                    id={`outstanding-${debt.id}`}
                     type="text"
-                    value={debt.sisaHutang}
+                    value={debt.outstanding || ""}
                     onChange={(e) => {
                       // Format to currency
                       const value = e.target.value.replace(/[^\d]/g, "");
@@ -1249,16 +1299,16 @@ export default function ClientDataPage() {
                         /\B(?=(\d{3})+(?!\d))/g,
                         "."
                       );
-                      updateDebtEntry(debt.id, "sisaHutang", formatted);
+                      updateDebtEntry(debt.id, "outstanding", formatted);
                     }}
                     placeholder="Contoh: 5.000.000"
                     className={`${
-                      debt.sisaHutang ? "border-green-200" : ""
+                      debt.outstanding ? "border-green-200" : ""
                     } text-right`}
                   />
-                  {debt.sisaHutang && (
+                  {debt.outstanding && (
                     <p className="text-xs text-green-600">
-                      ✓ Sisa hutang: Rp {debt.sisaHutang}
+                      ✓ Outstanding: Rp {debt.outstanding}
                     </p>
                   )}
                   <p className="text-xs text-gray-500">
