@@ -12,6 +12,8 @@ import Highlight from "@tiptap/extension-highlight";
 import Link from "@tiptap/extension-link";
 import Image from "@tiptap/extension-image";
 import Placeholder from "@tiptap/extension-placeholder";
+import FontFamily from "@tiptap/extension-font-family";
+import { TextStyle } from "@tiptap/extension-text-style";
 import { Table } from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
 import TableCell from "@tiptap/extension-table-cell";
@@ -21,6 +23,8 @@ import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Tooltip,
   TooltipContent,
@@ -67,7 +71,11 @@ import {
   Palette,
   Plus,
   FileText,
+  LineChart,
+  Settings,
 } from "lucide-react";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 
 interface RichEditorProps {
   content?: string;
@@ -96,11 +104,18 @@ const RichEditor: React.FC<RichEditorProps> = ({
 }) => {
   const isClient = useIsClient();
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [lineHeight, setLineHeight] = useState(1.6);
+  const [fontSize, setFontSize] = useState(14);
+  const [fontFamily, setFontFamily] = useState("Inter, system-ui, sans-serif");
 
   const editor = useEditor(
     {
       extensions: [
         StarterKit,
+        TextStyle,
+        FontFamily.configure({
+          types: ["textStyle"],
+        }),
         TextAlign.configure({
           types: ["heading", "paragraph"],
         }),
@@ -139,7 +154,7 @@ const RichEditor: React.FC<RichEditorProps> = ({
         attributes: {
           class:
             "prose prose-sm max-w-none focus:outline-none min-h-full border-0 bg-transparent",
-          style: `min-height: ${minHeight}; padding: 16px; line-height: 1.6;`,
+          style: `min-height: ${minHeight}; padding: 16px; line-height: ${lineHeight}; font-size: ${fontSize}px; font-family: ${fontFamily};`,
           spellcheck: "false",
         },
       },
@@ -149,7 +164,7 @@ const RichEditor: React.FC<RichEditorProps> = ({
         onChange?.(text, html);
       },
     },
-    [editable, minHeight] // Remove content from dependency array
+    [editable, minHeight, lineHeight, fontSize, fontFamily] // Add new dependencies
   );
 
   // Handle content updates without recreating the editor
@@ -270,9 +285,6 @@ const RichEditor: React.FC<RichEditorProps> = ({
     try {
       setIsDownloadingPdf(true);
 
-      // Import html2pdf dynamically
-      const html2pdf = (await import("html2pdf.js")).default;
-
       // Create a temporary container for PDF generation
       const tempContainer = document.createElement("div");
       tempContainer.style.position = "absolute";
@@ -280,56 +292,67 @@ const RichEditor: React.FC<RichEditorProps> = ({
       tempContainer.style.top = "-9999px";
       tempContainer.style.width = "794px"; // A4 width in pixels at 96 DPI
       tempContainer.style.padding = "40px";
-      tempContainer.style.fontFamily = "Times New Roman, serif";
-      tempContainer.style.fontSize = "14px";
-      tempContainer.style.lineHeight = "1.6";
-      tempContainer.style.color = "#000";
-      tempContainer.style.backgroundColor = "#fff";
+      tempContainer.style.fontFamily = fontFamily;
+      tempContainer.style.fontSize = `${fontSize}px`;
+      tempContainer.style.lineHeight = `${lineHeight}`;
+      tempContainer.style.backgroundColor = "white";
+      tempContainer.style.color = "black";
 
-      // Add editor content to container
-      tempContainer.innerHTML = editor.getHTML();
+      // Clone the editor content
+      const html = editor.getHTML();
+      tempContainer.innerHTML = html;
 
-      // Append to body temporarily
+      // Append to body for rendering
       document.body.appendChild(tempContainer);
 
-      // Generate filename with timestamp
-      const timestamp = new Date()
-        .toISOString()
-        .slice(0, 16)
-        .replace(/[T:]/g, "-");
-      const fileName = `rich-editor-document-${timestamp}.pdf`;
+      // Use html2canvas to capture the content
+      const canvas = await html2canvas(tempContainer, {
+        useCORS: true,
+        allowTaint: true,
+        background: "#ffffff",
+        width: 794,
+        height: tempContainer.scrollHeight,
+      });
 
-      // Configure PDF options
-      const options = {
-        margin: [15, 15, 15, 15], // top, right, bottom, left in mm
-        filename: fileName,
-        image: { type: "jpeg", quality: 0.98 },
-        html2canvas: {
-          scale: 2,
-          useCORS: true,
-          letterRendering: true,
-          allowTaint: false,
-        },
-        jsPDF: {
-          unit: "mm",
-          format: "a4",
-          orientation: "portrait",
-          compressPDF: true,
-        },
-        pagebreak: { mode: ["avoid-all", "css", "legacy"] },
-      };
-
-      // Generate and download PDF
-      await html2pdf().set(options).from(tempContainer).save();
-
-      // Clean up
+      // Remove temporary container
       document.body.removeChild(tempContainer);
+
+      // Create PDF using jsPDF
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "px",
+        format: [794, 1123], // A4 size in pixels
+      });
+
+      const imgData = canvas.toDataURL("image/png");
+      const imgWidth = 794;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      // Calculate how many pages we need
+      const pageHeight = 1123;
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      // Add first page
+      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      // Add additional pages if needed
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      // Download the PDF
+      pdf.save("document.pdf");
     } catch (error) {
       console.error("Error generating PDF:", error);
     } finally {
       setIsDownloadingPdf(false);
     }
-  }, [editor, isDownloadingPdf]);
+  }, [editor, isDownloadingPdf, fontFamily, fontSize, lineHeight]);
 
   // Show loading skeleton while client-side hydration
   if (!isClient || !editor) {
@@ -841,6 +864,144 @@ const RichEditor: React.FC<RichEditorProps> = ({
               </DropdownMenu>
             </>
           )}
+
+          <Separator orientation="vertical" className="h-6 mx-1" />
+
+          {/* Font Settings */}
+          <div className="flex items-center gap-2">
+            {/* Font Family */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-8 px-2 text-xs">
+                  <Type className="w-3 h-3 mr-1" />
+                  Font
+                  <ChevronDown className="w-3 h-3 ml-1" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuLabel>Font Family</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => {
+                    setFontFamily("Inter, system-ui, sans-serif");
+                    editor
+                      ?.chain()
+                      .focus()
+                      .setFontFamily("Inter, system-ui, sans-serif")
+                      .run();
+                  }}
+                  className={
+                    fontFamily.includes("Inter")
+                      ? "bg-gray-100 dark:bg-gray-700"
+                      : ""
+                  }
+                >
+                  Inter (Default)
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setFontFamily("Times New Roman, serif");
+                    editor
+                      ?.chain()
+                      .focus()
+                      .setFontFamily("Times New Roman, serif")
+                      .run();
+                  }}
+                  className={
+                    fontFamily.includes("Times")
+                      ? "bg-gray-100 dark:bg-gray-700"
+                      : ""
+                  }
+                >
+                  Times New Roman
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setFontFamily("Arial, Helvetica, sans-serif");
+                    editor
+                      ?.chain()
+                      .focus()
+                      .setFontFamily("Arial, Helvetica, sans-serif")
+                      .run();
+                  }}
+                  className={
+                    fontFamily.includes("Arial")
+                      ? "bg-gray-100 dark:bg-gray-700"
+                      : ""
+                  }
+                >
+                  Arial
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setFontFamily("Georgia, serif");
+                    editor
+                      ?.chain()
+                      .focus()
+                      .setFontFamily("Georgia, serif")
+                      .run();
+                  }}
+                  className={
+                    fontFamily.includes("Georgia")
+                      ? "bg-gray-100 dark:bg-gray-700"
+                      : ""
+                  }
+                >
+                  Georgia
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setFontFamily("Courier New, monospace");
+                    editor
+                      ?.chain()
+                      .focus()
+                      .setFontFamily("Courier New, monospace")
+                      .run();
+                  }}
+                  className={
+                    fontFamily.includes("Courier")
+                      ? "bg-gray-100 dark:bg-gray-700"
+                      : ""
+                  }
+                >
+                  Courier New
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Font Size */}
+            <div className="flex items-center gap-1">
+              <Label htmlFor="fontSize" className="text-xs whitespace-nowrap">
+                Size:
+              </Label>
+              <Input
+                id="fontSize"
+                type="number"
+                min="8"
+                max="72"
+                value={fontSize}
+                onChange={(e) => setFontSize(Number(e.target.value))}
+                className="w-14 h-8 text-xs"
+              />
+            </div>
+
+            {/* Line Height */}
+            <div className="flex items-center gap-1">
+              <Label htmlFor="lineHeight" className="text-xs whitespace-nowrap">
+                Line:
+              </Label>
+              <Input
+                id="lineHeight"
+                type="number"
+                min="0.5"
+                max="3"
+                step="0.1"
+                value={lineHeight}
+                onChange={(e) => setLineHeight(Number(e.target.value))}
+                className="w-14 h-8 text-xs"
+              />
+            </div>
+          </div>
 
           <Separator orientation="vertical" className="h-6 mx-1" />
 

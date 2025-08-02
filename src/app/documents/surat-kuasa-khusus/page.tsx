@@ -343,6 +343,11 @@ export default function SuratKuasaKhususPage() {
   const [showVariables, setShowVariables] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // Edit mode functionality
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editingDocumentId, setEditingDocumentId] = useState<string>("");
+  const [originalDocumentData, setOriginalDocumentData] = useState<any>(null);
+
   // Utility function to convert month to Roman numerals
   const toRomanNumeral = (month: number): string => {
     const romanNumerals = [
@@ -516,7 +521,9 @@ export default function SuratKuasaKhususPage() {
   // Fetch document history from Firestore
   const fetchDocumentHistory = useCallback(async () => {
     try {
-      console.log("Fetching document history...");
+      console.log("fetchDocumentHistory - Starting fetch process");
+      console.log("dateRange:", dateRange);
+      console.log("searchTerm:", searchTerm);
       setHistoryLoading(true);
 
       // Base query - fetch all documents first for client-side filtering
@@ -525,6 +532,7 @@ export default function SuratKuasaKhususPage() {
         orderBy("createdAt", "desc")
       );
 
+      console.log("Executing Firestore query...");
       const snapshot = await getDocs(q);
       console.log("Raw documents fetched:", snapshot.size);
 
@@ -534,37 +542,54 @@ export default function SuratKuasaKhususPage() {
         createdAt: doc.data().createdAt?.toDate?.() || new Date(),
       })) as any[];
 
-      console.log("All documents:", allDocuments);
+      console.log("All documents after mapping:", allDocuments.length);
+      console.log("Sample document:", allDocuments[0]);
 
       // Filter by type (optional - remove if you want all document types)
+      const beforeTypeFilter = allDocuments.length;
       allDocuments = allDocuments.filter(
         (doc) => doc.type === "surat_kuasa_khusus" || !doc.type
+      );
+      console.log(
+        `After type filter: ${allDocuments.length} (was ${beforeTypeFilter})`
       );
 
       // Apply date range filter
       if (dateRange.from) {
+        const beforeDateFilter = allDocuments.length;
         allDocuments = allDocuments.filter(
           (doc) => doc.createdAt >= dateRange.from!
+        );
+        console.log(
+          `After 'from' date filter: ${allDocuments.length} (was ${beforeDateFilter})`
         );
       }
 
       if (dateRange.to) {
+        const beforeDateFilter = allDocuments.length;
         const toDate = new Date(dateRange.to);
         toDate.setHours(23, 59, 59, 999);
         allDocuments = allDocuments.filter((doc) => doc.createdAt <= toDate);
+        console.log(
+          `After 'to' date filter: ${allDocuments.length} (was ${beforeDateFilter})`
+        );
       }
 
       // Apply search filter
       if (searchTerm) {
+        const beforeSearchFilter = allDocuments.length;
         allDocuments = allDocuments.filter(
           (doc) =>
             doc.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             doc.clientName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             doc.documentNumber?.toLowerCase().includes(searchTerm.toLowerCase())
         );
+        console.log(
+          `After search filter: ${allDocuments.length} (was ${beforeSearchFilter})`
+        );
       }
 
-      console.log("Filtered documents:", allDocuments.length);
+      console.log("Final filtered documents:", allDocuments.length);
       setDocumentHistory(allDocuments);
     } catch (error) {
       console.error("Error fetching document history:", error);
@@ -936,6 +961,51 @@ export default function SuratKuasaKhususPage() {
   const handleViewDocument = (document: any) => {
     setSelectedDocumentForView(document);
     setIsDocumentViewDialogOpen(true);
+  };
+
+  const handleEditDocument = async (document: any) => {
+    try {
+      console.log("Starting edit document:", document.id);
+
+      // Set edit mode
+      setIsEditMode(true);
+      setEditingDocumentId(document.id);
+      setOriginalDocumentData(document);
+
+      // Populate form with document data
+      if (document.clientId) {
+        console.log("Setting client ID:", document.clientId);
+        setSelectedClientId(document.clientId);
+      }
+
+      if (document.debtId) {
+        console.log("Setting debt ID:", document.debtId);
+        setSelectedDebtId(document.debtId);
+      }
+
+      // Set editor content
+      if (document.rawContent) {
+        console.log("Setting editor content");
+        setEditorContent(document.rawContent);
+      }
+
+      toast.success(
+        "Mode edit diaktifkan. Silakan edit dokumen dan simpan kembali."
+      );
+    } catch (error) {
+      console.error("Error editing document:", error);
+      toast.error("Gagal memuat dokumen untuk edit");
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditMode(false);
+    setEditingDocumentId("");
+    setOriginalDocumentData(null);
+    setSelectedClientId("");
+    setSelectedDebtId("");
+    setEditorContent("");
+    toast.info("Mode edit dibatalkan");
   };
 
   // Document Preview functionality
@@ -1785,6 +1855,376 @@ export default function SuratKuasaKhususPage() {
     selectedClient,
     selectedDebt,
     processTemplate,
+  ]);
+
+  // Move useCallback hooks to top level to avoid hook order violations
+  // Optimized print handler with better error handling
+  const handlePrintDocument = useCallback(() => {
+    try {
+      const printWindow = window.open("", "_blank");
+      if (!printWindow) {
+        toast.error(
+          "Popup diblokir. Harap izinkan popup untuk mencetak dokumen."
+        );
+        return;
+      }
+
+      // Optimized print styles - extracted to avoid repetition
+      const printStyles = `
+        @page {
+          size: A4;
+          margin: 2.5cm;
+        }
+        @media print {
+          body { -webkit-print-color-adjust: exact; }
+          * { print-color-adjust: exact; }
+        }
+        body {
+          font-family: 'Times New Roman', serif;
+          font-size: 12pt;
+          line-height: 1.6;
+          color: #000;
+          background: #fff;
+          margin: 0;
+          padding: 0;
+        }
+        .header {
+          text-align: center;
+          margin-bottom: 30px;
+          font-weight: bold;
+          text-transform: uppercase;
+        }
+        .content {
+          text-align: justify;
+          margin-bottom: 30px;
+        }
+        .signature-section {
+          margin-top: 50px;
+          display: flex;
+          justify-content: space-between;
+        }
+        .signature-box {
+          text-align: center;
+          width: 200px;
+        }
+        .signature-line {
+          border-bottom: 1px solid #000;
+          margin-top: 80px;
+          margin-bottom: 5px;
+        }
+        p { margin-bottom: 10px; }
+        h1, h2, h3 { margin: 20px 0 10px 0; }
+        ul, ol { margin: 10px 0; padding-left: 30px; }
+        table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+        th, td { border: 1px solid #000; padding: 8px; text-align: left; }
+      `;
+
+      // Get fresh content at print time
+      const currentContentForProcessing =
+        editorContent || (selectedTemplate ? selectedTemplate.content : "");
+      const currentProcessedContent = processTemplate(
+        currentContentForProcessing
+      );
+
+      const documentTitle = `Surat Kuasa Khusus - ${
+        selectedClient?.personalData.namaLengkap || "Unknown"
+      }`;
+
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="UTF-8">
+            <title>${documentTitle}</title>
+            <style>${printStyles}</style>
+          </head>
+          <body>
+            ${currentProcessedContent}
+          </body>
+        </html>
+      `);
+
+      printWindow.document.close();
+
+      // Wait for content to load before printing
+      printWindow.onload = () => {
+        setTimeout(() => {
+          printWindow.print();
+          printWindow.close();
+        }, 250);
+      };
+
+      toast.success("Dokumen siap untuk dicetak");
+    } catch (error) {
+      console.error("Error printing document:", error);
+      toast.error("Gagal membuka dialog cetak");
+    }
+  }, [
+    editorContent,
+    selectedTemplate,
+    processTemplate,
+    selectedClient?.personalData.namaLengkap,
+  ]);
+
+  // Optimized PDF download with better performance
+  const handleDownloadPDF = useCallback(async () => {
+    if (isDownloading) return; // Prevent double-click
+
+    try {
+      setIsDownloading(true);
+      toast.info("Sedang mempersiapkan PDF...");
+
+      // Dynamic import for better code splitting
+      const html2pdf = (await import("html2pdf.js")).default;
+
+      // Get fresh content at download time
+      const currentContentForProcessing =
+        editorContent || (selectedTemplate ? selectedTemplate.content : "");
+      const currentProcessedContent = processTemplate(
+        currentContentForProcessing
+      );
+
+      // Create optimized temporary container
+      const element = document.createElement("div");
+      element.innerHTML = currentProcessedContent;
+
+      // Apply styles for better PDF rendering
+      Object.assign(element.style, {
+        fontFamily: "Times New Roman, serif",
+        fontSize: "12pt",
+        lineHeight: "1.6",
+        color: "#000",
+        background: "#fff",
+        padding: "20px",
+        width: "210mm",
+        minHeight: "297mm",
+      });
+
+      // Optimized PDF options
+      const pdfOptions = {
+        margin: [25, 25, 25, 25],
+        filename: `${fileName}.pdf`,
+        image: {
+          type: "jpeg",
+          quality: 0.95, // Slightly reduced for faster processing
+        },
+        html2canvas: {
+          scale: 1.5, // Reduced scale for better performance
+          useCORS: true,
+          letterRendering: true,
+          allowTaint: true,
+          backgroundColor: "#ffffff",
+        },
+        jsPDF: {
+          unit: "mm",
+          format: "a4",
+          orientation: "portrait",
+          compress: true,
+        },
+      };
+
+      await html2pdf().set(pdfOptions).from(element).save();
+      toast.success("Dokumen PDF berhasil diunduh");
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Terjadi kesalahan tidak diketahui";
+      toast.error(`Gagal membuat PDF: ${errorMessage}`);
+    } finally {
+      setIsDownloading(false);
+    }
+  }, [
+    fileName,
+    isDownloading,
+    editorContent,
+    selectedTemplate,
+    processTemplate,
+  ]);
+
+  // Optimized save document with better validation
+  const handleSaveDocument = useCallback(async () => {
+    if (saving) return; // Prevent double-click
+
+    try {
+      setSaving(true);
+
+      // Check if we're in edit mode
+      const isEditing = isEditMode && editingDocumentId;
+      const actionText = isEditing ? "memperbarui" : "menyimpan";
+
+      toast.info(`Sedang ${actionText} dokumen...`);
+
+      // Debug logging
+      console.log(`handleSaveDocument - Starting ${actionText} process`);
+      console.log("isEditMode:", isEditMode);
+      console.log("editingDocumentId:", editingDocumentId);
+      console.log("selectedClientId:", selectedClientId);
+      console.log("selectedDebtId:", selectedDebtId);
+      console.log("documentNumber:", documentNumber);
+      console.log(
+        "editorContent:",
+        editorContent ? editorContent.substring(0, 100) + "..." : "empty"
+      );
+      console.log("selectedTemplate:", selectedTemplate?.name || "none");
+
+      // Validate required data before saving
+      if (!selectedClientId || !selectedDebtId || !documentNumber) {
+        const missingFields = [];
+        if (!selectedClientId) missingFields.push("Client");
+        if (!selectedDebtId) missingFields.push("Debt");
+        if (!documentNumber) missingFields.push("Document Number");
+
+        const errorMsg = `Data tidak lengkap: ${missingFields.join(", ")}`;
+        console.error("Validation failed:", errorMsg);
+        toast.error(errorMsg);
+        return;
+      }
+
+      // Get fresh content at save time to avoid stale closures
+      const currentContentForProcessing =
+        editorContent || (selectedTemplate ? selectedTemplate.content : "");
+
+      if (
+        !currentContentForProcessing ||
+        currentContentForProcessing.trim() === ""
+      ) {
+        console.error("No content to save");
+        toast.error(
+          "Tidak ada konten untuk disimpan. Pilih template atau isi konten terlebih dahulu."
+        );
+        return;
+      }
+
+      const currentProcessedContent = processTemplate(
+        currentContentForProcessing
+      );
+
+      console.log("Content validation passed");
+      console.log(
+        "currentContentForProcessing length:",
+        currentContentForProcessing.length
+      );
+      console.log(
+        "currentProcessedContent length:",
+        currentProcessedContent.length
+      );
+
+      const documentData: any = {
+        clientId: selectedClientId,
+        clientName: selectedClient?.personalData.namaLengkap || "",
+        clientNik: selectedClient?.personalData.nik || "",
+        debtId: selectedDebtId,
+        debtType: selectedDebt?.jenisHutang || "N/A",
+        bankProvider: selectedDebt?.bankProvider || "N/A",
+        documentNumber,
+        content: currentProcessedContent,
+        rawContent: currentContentForProcessing,
+        variables: getAvailableVariables(),
+        templateId: selectedTemplateId,
+        templateName: selectedTemplate?.name || "Template Custom",
+        type: "surat_kuasa_khusus", // Add type field for filtering
+        title: `Surat Kuasa Khusus - ${
+          selectedClient?.personalData.namaLengkap || ""
+        }`, // Add title field for search
+        updatedAt: serverTimestamp(),
+        // Additional metadata for better tracking
+        metadata: {
+          fileName,
+          contentLength: currentProcessedContent.length,
+          variableCount: getAvailableVariables().length,
+        },
+      };
+
+      // Add createdAt only for new documents
+      if (!isEditing) {
+        documentData.createdAt = serverTimestamp();
+      }
+
+      console.log(
+        "documentData prepared with fields:",
+        Object.keys(documentData)
+      );
+      console.log("Content length:", documentData.content.length);
+      console.log("Variables count:", documentData.variables.length);
+
+      if (isEditing) {
+        // Update existing document
+        console.log(
+          "Attempting to update Firestore document:",
+          editingDocumentId
+        );
+        await updateDoc(
+          doc(db, "generated_documents", editingDocumentId),
+          documentData
+        );
+        console.log(
+          "Document updated successfully with ID:",
+          editingDocumentId
+        );
+
+        toast.success(`Dokumen berhasil diperbarui`);
+
+        // Exit edit mode
+        setIsEditMode(false);
+        setEditingDocumentId("");
+        setOriginalDocumentData(null);
+      } else {
+        // Create new document
+        console.log(
+          "Attempting to save to Firestore collection: generated_documents"
+        );
+        const docRef = await addDoc(
+          collection(db, "generated_documents"),
+          documentData
+        );
+        console.log("Document saved successfully with ID:", docRef.id);
+
+        toast.success(
+          `Dokumen berhasil disimpan ke database (ID: ${docRef.id.substring(
+            0,
+            8
+          )}...)`
+        );
+      }
+
+      // Refresh document history
+      console.log("Refreshing document history...");
+      await fetchDocumentHistory();
+      console.log("Document history refreshed");
+    } catch (error) {
+      console.error("Error saving document:", error);
+      console.error("Error details:", {
+        name: error instanceof Error ? error.name : "Unknown",
+        message: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : "No stack trace",
+      });
+
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Terjadi kesalahan tidak diketahui";
+      toast.error(`Gagal menyimpan dokumen: ${errorMessage}`);
+    } finally {
+      setSaving(false);
+    }
+  }, [
+    saving,
+    isEditMode,
+    editingDocumentId,
+    selectedClientId,
+    selectedDebtId,
+    documentNumber,
+    selectedClient,
+    selectedDebt,
+    selectedTemplateId,
+    selectedTemplate,
+    fileName,
+    editorContent,
+    processTemplate,
+    getAvailableVariables,
+    fetchDocumentHistory,
   ]);
 
   // Step 1: Pilih Klien dengan tips
@@ -2945,264 +3385,6 @@ export default function SuratKuasaKhususPage() {
       );
     }
 
-    // Optimized print styles - extracted to avoid repetition
-    const printStyles = `
-      @page {
-        size: A4;
-        margin: 2.5cm;
-      }
-      @media print {
-        body { -webkit-print-color-adjust: exact; }
-        * { print-color-adjust: exact; }
-      }
-      body {
-        font-family: 'Times New Roman', serif;
-        font-size: 12pt;
-        line-height: 1.6;
-        color: #000;
-        background: #fff;
-        margin: 0;
-        padding: 0;
-      }
-      .header {
-        text-align: center;
-        margin-bottom: 30px;
-        font-weight: bold;
-        text-transform: uppercase;
-      }
-      .content {
-        text-align: justify;
-        margin-bottom: 30px;
-      }
-      .signature-section {
-        margin-top: 50px;
-        display: flex;
-        justify-content: space-between;
-      }
-      .signature-box {
-        text-align: center;
-        width: 200px;
-      }
-      .signature-line {
-        border-bottom: 1px solid #000;
-        margin-top: 80px;
-        margin-bottom: 5px;
-      }
-      p { margin-bottom: 10px; }
-      h1, h2, h3 { margin: 20px 0 10px 0; }
-      ul, ol { margin: 10px 0; padding-left: 30px; }
-      table { width: 100%; border-collapse: collapse; margin: 10px 0; }
-      th, td { border: 1px solid #000; padding: 8px; text-align: left; }
-    `;
-
-    // Optimized print handler with better error handling
-    const handlePrintDocument = useCallback(() => {
-      try {
-        const printWindow = window.open("", "_blank");
-        if (!printWindow) {
-          toast.error(
-            "Popup diblokir. Harap izinkan popup untuk mencetak dokumen."
-          );
-          return;
-        }
-
-        // Get fresh content at print time
-        const currentContentForProcessing =
-          editorContent || (selectedTemplate ? selectedTemplate.content : "");
-        const currentProcessedContent = processTemplate(
-          currentContentForProcessing
-        );
-
-        const documentTitle = `Surat Kuasa Khusus - ${selectedClient.personalData.namaLengkap}`;
-
-        printWindow.document.write(`
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <meta charset="UTF-8">
-              <title>${documentTitle}</title>
-              <style>${printStyles}</style>
-            </head>
-            <body>
-              ${currentProcessedContent}
-            </body>
-          </html>
-        `);
-
-        printWindow.document.close();
-
-        // Wait for content to load before printing
-        printWindow.onload = () => {
-          setTimeout(() => {
-            printWindow.print();
-            printWindow.close();
-          }, 250);
-        };
-
-        toast.success("Dokumen siap untuk dicetak");
-      } catch (error) {
-        console.error("Error printing document:", error);
-        toast.error("Gagal membuka dialog cetak");
-      }
-    }, [
-      editorContent,
-      selectedTemplate,
-      processTemplate,
-      selectedClient?.personalData.namaLengkap,
-    ]);
-
-    // Optimized PDF download with better performance
-    const handleDownloadPDF = useCallback(async () => {
-      if (isDownloading) return; // Prevent double-click
-
-      try {
-        setIsDownloading(true);
-        toast.info("Sedang mempersiapkan PDF...");
-
-        // Dynamic import for better code splitting
-        const html2pdf = (await import("html2pdf.js")).default;
-
-        // Get fresh content at download time
-        const currentContentForProcessing =
-          editorContent || (selectedTemplate ? selectedTemplate.content : "");
-        const currentProcessedContent = processTemplate(
-          currentContentForProcessing
-        );
-
-        // Create optimized temporary container
-        const element = document.createElement("div");
-        element.innerHTML = currentProcessedContent;
-
-        // Apply styles for better PDF rendering
-        Object.assign(element.style, {
-          fontFamily: "Times New Roman, serif",
-          fontSize: "12pt",
-          lineHeight: "1.6",
-          color: "#000",
-          background: "#fff",
-          padding: "20px",
-          width: "210mm",
-          minHeight: "297mm",
-        });
-
-        // Optimized PDF options
-        const pdfOptions = {
-          margin: [25, 25, 25, 25],
-          filename: `${fileName}.pdf`,
-          image: {
-            type: "jpeg",
-            quality: 0.95, // Slightly reduced for faster processing
-          },
-          html2canvas: {
-            scale: 1.5, // Reduced scale for better performance
-            useCORS: true,
-            letterRendering: true,
-            allowTaint: true,
-            backgroundColor: "#ffffff",
-          },
-          jsPDF: {
-            unit: "mm",
-            format: "a4",
-            orientation: "portrait",
-            compress: true,
-          },
-        };
-
-        await html2pdf().set(pdfOptions).from(element).save();
-        toast.success("Dokumen PDF berhasil diunduh");
-      } catch (error) {
-        console.error("Error generating PDF:", error);
-        const errorMessage =
-          error instanceof Error
-            ? error.message
-            : "Terjadi kesalahan tidak diketahui";
-        toast.error(`Gagal membuat PDF: ${errorMessage}`);
-      } finally {
-        setIsDownloading(false);
-      }
-    }, [
-      fileName,
-      isDownloading,
-      editorContent,
-      selectedTemplate,
-      processTemplate,
-    ]);
-
-    // Optimized save document with better validation
-    const handleSaveDocument = useCallback(async () => {
-      if (saving) return; // Prevent double-click
-
-      try {
-        setSaving(true);
-        toast.info("Sedang menyimpan dokumen...");
-
-        // Validate required data before saving
-        if (!selectedClientId || !selectedDebtId || !documentNumber) {
-          toast.error("Data klien atau hutang tidak lengkap");
-          return;
-        }
-
-        // Get fresh content at save time to avoid stale closures
-        const currentContentForProcessing =
-          editorContent || (selectedTemplate ? selectedTemplate.content : "");
-        const currentProcessedContent = processTemplate(
-          currentContentForProcessing
-        );
-
-        const documentData = {
-          clientId: selectedClientId,
-          clientName: selectedClient.personalData.namaLengkap,
-          clientNik: selectedClient.personalData.nik,
-          debtId: selectedDebtId,
-          debtType: selectedDebt?.jenisHutang || "N/A",
-          bankProvider: selectedDebt?.bankProvider || "N/A",
-          documentNumber,
-          content: currentProcessedContent,
-          rawContent: currentContentForProcessing,
-          variables: getAvailableVariables(),
-          templateId: selectedTemplateId,
-          templateName: selectedTemplate?.name || "Template Custom",
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          // Additional metadata for better tracking
-          metadata: {
-            fileName,
-            contentLength: currentProcessedContent.length,
-            variableCount: getAvailableVariables().length,
-          },
-        };
-
-        await addDoc(collection(db, "surat-kuasa-khusus"), documentData);
-        toast.success("Dokumen berhasil disimpan ke database");
-
-        // Refresh document history
-        fetchDocumentHistory();
-      } catch (error) {
-        console.error("Error saving document:", error);
-        const errorMessage =
-          error instanceof Error
-            ? error.message
-            : "Terjadi kesalahan tidak diketahui";
-        toast.error(`Gagal menyimpan dokumen: ${errorMessage}`);
-      } finally {
-        setSaving(false);
-      }
-    }, [
-      saving,
-      selectedClientId,
-      selectedDebtId,
-      documentNumber,
-      selectedClient,
-      selectedDebt,
-      selectedTemplateId,
-      selectedTemplate,
-      fileName,
-      editorContent,
-      processTemplate,
-      getAvailableVariables,
-      fetchDocumentHistory,
-    ]);
-
     // Enhanced UI with loading states and better feedback
     return (
       <div className="space-y-6">
@@ -3407,11 +3589,12 @@ export default function SuratKuasaKhususPage() {
                   )}
                 </div>
                 <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-2">
-                  Simpan Dokumen
+                  {isEditMode ? "Perbarui Dokumen" : "Simpan Dokumen"}
                 </h4>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                  Simpan ke database untuk akses di masa mendatang dan audit
-                  trail
+                  {isEditMode
+                    ? "Perbarui dokumen yang sedang diedit dengan perubahan terbaru"
+                    : "Simpan ke database untuk akses di masa mendatang dan audit trail"}
                 </p>
                 <Button
                   onClick={handleSaveDocument}
@@ -3422,12 +3605,12 @@ export default function SuratKuasaKhususPage() {
                   {saving ? (
                     <>
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      Menyimpan...
+                      {isEditMode ? "Memperbarui..." : "Menyimpan..."}
                     </>
                   ) : (
                     <>
                       <Save className="h-4 w-4 mr-2" />
-                      Simpan Dokumen
+                      {isEditMode ? "Perbarui Dokumen" : "Simpan Dokumen"}
                     </>
                   )}
                 </Button>
@@ -4016,12 +4199,7 @@ export default function SuratKuasaKhususPage() {
                                   Duplikasi
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                  onClick={() => {
-                                    // Edit functionality - redirect to create with pre-filled data
-                                    const url = new URL(window.location.href);
-                                    url.searchParams.set("edit", doc.id);
-                                    window.location.href = url.toString();
-                                  }}
+                                  onClick={() => handleEditDocument(doc)}
                                   className="dark:hover:bg-gray-700"
                                 >
                                   <Edit className="h-4 w-4 mr-2" />
@@ -4434,12 +4612,33 @@ export default function SuratKuasaKhususPage() {
           >
             <div className="max-w-4xl mx-auto w-full">
               <div className="mb-6">
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                  Surat Kuasa Khusus
-                </h1>
+                <div className="flex items-center gap-3">
+                  <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+                    Surat Kuasa Khusus
+                  </h1>
+                  {isEditMode && (
+                    <div className="px-3 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 text-sm font-medium rounded-full border border-amber-200 dark:border-amber-700">
+                      Mode Edit
+                    </div>
+                  )}
+                </div>
                 <p className="text-gray-600 dark:text-gray-400 mt-2">
-                  Buat surat kuasa khusus untuk klien dengan mudah
+                  {isEditMode
+                    ? "Sedang mengedit dokumen. Klik simpan untuk memperbarui atau batalkan untuk keluar dari mode edit."
+                    : "Buat surat kuasa khusus untuk klien dengan mudah"}
                 </p>
+                {isEditMode && (
+                  <div className="mt-3 flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCancelEdit}
+                      className="text-gray-600 dark:text-gray-400"
+                    >
+                      Batalkan Edit
+                    </Button>
+                  </div>
+                )}
               </div>
 
               {/* Progress Summary Card */}

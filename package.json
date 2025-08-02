@@ -37,7 +37,7 @@
     "@radix-ui/react-toggle-group": "^1.1.10",
     "@radix-ui/react-tooltip": "^1.2.7",
     "@tiptap/extension-color": "^3.0.1",
-    "@tiptap/extension-font-family": "^3.0.1",
+    "@tiptap/extension-font-family": "^3.0.9",
     "@tiptap/extension-highlight": "^3.0.1",
     "@tiptap/extension-image": "^3.0.1",
     "@tiptap/extension-link": "^3.0.1",

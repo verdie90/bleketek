@@ -126,7 +126,8 @@ helloWorld();</code></pre>
           Full Featured Rich Editor
         </h2>
         <p className="text-gray-600 mb-4">
-          Editor lengkap dengan toolbar dan preview source code
+          Editor lengkap dengan toolbar, font controls, line height controls,
+          dan download PDF menggunakan html2canvas + jsPDF
         </p>
         <RichEditor
           content={initialContent}
@@ -143,10 +144,11 @@ helloWorld();</code></pre>
       <div>
         <h2 className="text-2xl font-semibold mb-4">Simple Rich Editor</h2>
         <p className="text-gray-600 mb-4">
-          Editor sederhana tanpa tab source code
+          Editor sederhana tanpa tab source code dengan font dan line height
+          custom
         </p>
         <RichEditor
-          content="<p>Editor sederhana untuk editing cepat. Mulai mengetik di sini...</p>"
+          content="<p style='font-family: Times New Roman, serif; font-size: 16px; line-height: 2;'>Editor sederhana untuk editing cepat dengan <strong>Times New Roman</strong> font dan line height 2.0. Gunakan toolbar untuk mengatur font family, ukuran font, dan jarak baris sesuai kebutuhan.</p>"
           onChange={(text, html) =>
             console.log("Simple editor changed:", { text, html })
           }
@@ -205,6 +207,19 @@ helloWorld();</code></pre>
             <li>Ctrl+U = Underline</li>
             <li>Ctrl+Z = Undo</li>
             <li>Ctrl+Y = Redo</li>
+          </ul>
+          <br />
+          <p>
+            <strong>Fitur Baru:</strong>
+          </p>
+          <ul className="list-disc list-inside">
+            <li>📝 Font Family Control - Pilih dari berbagai font</li>
+            <li>📏 Font Size Control - Atur ukuran font 8-72px</li>
+            <li>📐 Line Height Control - Atur jarak baris 0.5-3.0</li>
+            <li>
+              📄 PDF Download - html2canvas + jsPDF untuk kualitas terbaik
+            </li>
+            <li>🎨 Real-time Preview - Lihat perubahan langsung</li>
           </ul>
         </div>
       </div>
