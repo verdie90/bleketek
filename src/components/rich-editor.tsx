@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import { useIsClient } from "@/hooks/use-is-client";
 import StarterKit from "@tiptap/starter-kit";
@@ -66,6 +66,7 @@ import {
   ChevronDown,
   Palette,
   Plus,
+  FileText,
 } from "lucide-react";
 
 interface RichEditorProps {
@@ -94,6 +95,7 @@ const RichEditor: React.FC<RichEditorProps> = ({
   onVariableInsert,
 }) => {
   const isClient = useIsClient();
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
   const editor = useEditor(
     {
@@ -147,8 +149,29 @@ const RichEditor: React.FC<RichEditorProps> = ({
         onChange?.(text, html);
       },
     },
-    [content, editable, onChange, minHeight]
+    [editable, minHeight] // Remove content from dependency array
   );
+
+  // Handle content updates without recreating the editor
+  useEffect(() => {
+    if (editor && content !== undefined) {
+      const currentContent = editor.getHTML();
+
+      // Only update content if it's different and not empty
+      // This prevents infinite loops and preserves user edits
+      if (content !== currentContent && content.trim() !== "") {
+        // Use a timeout to avoid conflicts with ongoing editing
+        const timeoutId = setTimeout(() => {
+          if (editor && !editor.isFocused) {
+            // Only update if editor is not focused (user is not actively editing)
+            editor.commands.setContent(content, { emitUpdate: false });
+          }
+        }, 100);
+
+        return () => clearTimeout(timeoutId);
+      }
+    }
+  }, [editor, content]);
 
   const setLink = useCallback(() => {
     if (!editor) return;
@@ -240,6 +263,73 @@ const RichEditor: React.FC<RichEditorProps> = ({
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }, [editor]);
+
+  const downloadAsPdf = useCallback(async () => {
+    if (!editor || isDownloadingPdf) return;
+
+    try {
+      setIsDownloadingPdf(true);
+
+      // Import html2pdf dynamically
+      const html2pdf = (await import("html2pdf.js")).default;
+
+      // Create a temporary container for PDF generation
+      const tempContainer = document.createElement("div");
+      tempContainer.style.position = "absolute";
+      tempContainer.style.left = "-9999px";
+      tempContainer.style.top = "-9999px";
+      tempContainer.style.width = "794px"; // A4 width in pixels at 96 DPI
+      tempContainer.style.padding = "40px";
+      tempContainer.style.fontFamily = "Times New Roman, serif";
+      tempContainer.style.fontSize = "14px";
+      tempContainer.style.lineHeight = "1.6";
+      tempContainer.style.color = "#000";
+      tempContainer.style.backgroundColor = "#fff";
+
+      // Add editor content to container
+      tempContainer.innerHTML = editor.getHTML();
+
+      // Append to body temporarily
+      document.body.appendChild(tempContainer);
+
+      // Generate filename with timestamp
+      const timestamp = new Date()
+        .toISOString()
+        .slice(0, 16)
+        .replace(/[T:]/g, "-");
+      const fileName = `rich-editor-document-${timestamp}.pdf`;
+
+      // Configure PDF options
+      const options = {
+        margin: [15, 15, 15, 15], // top, right, bottom, left in mm
+        filename: fileName,
+        image: { type: "jpeg", quality: 0.98 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          letterRendering: true,
+          allowTaint: false,
+        },
+        jsPDF: {
+          unit: "mm",
+          format: "a4",
+          orientation: "portrait",
+          compressPDF: true,
+        },
+        pagebreak: { mode: ["avoid-all", "css", "legacy"] },
+      };
+
+      // Generate and download PDF
+      await html2pdf().set(options).from(tempContainer).save();
+
+      // Clean up
+      document.body.removeChild(tempContainer);
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  }, [editor, isDownloadingPdf]);
 
   // Show loading skeleton while client-side hydration
   if (!isClient || !editor) {
@@ -781,6 +871,26 @@ const RichEditor: React.FC<RichEditorProps> = ({
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Download as HTML</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={downloadAsPdf}
+                  disabled={isDownloadingPdf}
+                  className="h-8 w-8 p-0"
+                >
+                  {isDownloadingPdf ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+                  ) : (
+                    <FileText className="w-4 h-4" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {isDownloadingPdf ? "Generating PDF..." : "Download as PDF"}
+              </TooltipContent>
             </Tooltip>
           </div>
         </div>

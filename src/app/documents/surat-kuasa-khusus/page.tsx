@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import {
   Breadcrumb,
@@ -91,6 +91,11 @@ import {
   List,
   MoreVertical,
   Copy,
+  Check,
+  AlertCircle,
+  Hash,
+  Info,
+  Printer,
 } from "lucide-react";
 import {
   collection,
@@ -174,7 +179,94 @@ const STEPS = [
   { id: 2, title: "Pilih Hutang" },
   { id: 3, title: "Pengaturan Dokumen" },
   { id: 4, title: "Template & Variabel" },
+  { id: 5, title: "Generate & Print" },
 ];
+
+// Utility functions - extracted outside component for stability
+const getDayInIndonesian = (date: Date): string => {
+  const days = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+  return days[date.getDay()];
+};
+
+const getMonthInIndonesian = (month: number): string => {
+  const months = [
+    "Januari",
+    "Februari",
+    "Maret",
+    "April",
+    "Mei",
+    "Juni",
+    "Juli",
+    "Agustus",
+    "September",
+    "Oktober",
+    "November",
+    "Desember",
+  ];
+  return months[month - 1] || "Januari";
+};
+
+const numberToWords = (num: number): string => {
+  const ones = [
+    "",
+    "satu",
+    "dua",
+    "tiga",
+    "empat",
+    "lima",
+    "enam",
+    "tujuh",
+    "delapan",
+    "sembilan",
+    "sepuluh",
+    "sebelas",
+    "dua belas",
+    "tiga belas",
+    "empat belas",
+    "lima belas",
+    "enam belas",
+    "tujuh belas",
+    "delapan belas",
+    "sembilan belas",
+  ];
+
+  const tens = [
+    "",
+    "",
+    "dua puluh",
+    "tiga puluh",
+    "empat puluh",
+    "lima puluh",
+    "enam puluh",
+    "tujuh puluh",
+    "delapan puluh",
+    "sembilan puluh",
+  ];
+
+  if (num === 0) return "nol";
+  if (num < 20) return ones[num];
+  if (num < 100) {
+    const ten = Math.floor(num / 10);
+    const one = num % 10;
+    return tens[ten] + (one ? " " + ones[one] : "");
+  }
+  if (num < 1000) {
+    const hundred = Math.floor(num / 100);
+    const remainder = num % 100;
+    const hundredWord = hundred === 1 ? "seratus" : ones[hundred] + " ratus";
+    return hundredWord + (remainder ? " " + numberToWords(remainder) : "");
+  }
+  if (num < 1000000) {
+    const thousand = Math.floor(num / 1000);
+    const remainder = num % 1000;
+    const thousandWord =
+      thousand === 1 ? "seribu" : numberToWords(thousand) + " ribu";
+    return thousandWord + (remainder ? " " + numberToWords(remainder) : "");
+  }
+
+  // For larger numbers, use a simplified approach
+  return num.toString();
+};
 
 export default function SuratKuasaKhususPage() {
   const isClient = useIsClient();
@@ -248,6 +340,8 @@ export default function SuratKuasaKhususPage() {
   const [showDocumentPreview, setShowDocumentPreview] = useState(false);
   const [previewContent, setPreviewContent] = useState<string>("");
   const [isPreviewing, setIsPreviewing] = useState(false);
+  const [showVariables, setShowVariables] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   // Utility function to convert month to Roman numerals
   const toRomanNumeral = (month: number): string => {
@@ -266,104 +360,6 @@ export default function SuratKuasaKhususPage() {
       "XII",
     ];
     return romanNumerals[month - 1] || "I";
-  };
-
-  // Utility function to convert day to Indonesian
-  const getDayInIndonesian = (date: Date): string => {
-    const days = [
-      "Minggu",
-      "Senin",
-      "Selasa",
-      "Rabu",
-      "Kamis",
-      "Jumat",
-      "Sabtu",
-    ];
-    return days[date.getDay()];
-  };
-
-  // Utility function to convert month to Indonesian
-  const getMonthInIndonesian = (month: number): string => {
-    const months = [
-      "Januari",
-      "Februari",
-      "Maret",
-      "April",
-      "Mei",
-      "Juni",
-      "Juli",
-      "Agustus",
-      "September",
-      "Oktober",
-      "November",
-      "Desember",
-    ];
-    return months[month - 1] || "Januari";
-  };
-
-  // Utility function to convert number to Indonesian words
-  const numberToWords = (num: number): string => {
-    const ones = [
-      "",
-      "satu",
-      "dua",
-      "tiga",
-      "empat",
-      "lima",
-      "enam",
-      "tujuh",
-      "delapan",
-      "sembilan",
-      "sepuluh",
-      "sebelas",
-      "dua belas",
-      "tiga belas",
-      "empat belas",
-      "lima belas",
-      "enam belas",
-      "tujuh belas",
-      "delapan belas",
-      "sembilan belas",
-    ];
-
-    const tens = [
-      "",
-      "",
-      "dua puluh",
-      "tiga puluh",
-      "empat puluh",
-      "lima puluh",
-      "enam puluh",
-      "tujuh puluh",
-      "delapan puluh",
-      "sembilan puluh",
-    ];
-
-    const thousands = ["", "ribu", "juta", "miliar"];
-
-    if (num === 0) return "nol";
-    if (num < 20) return ones[num];
-    if (num < 100) {
-      const ten = Math.floor(num / 10);
-      const one = num % 10;
-      return tens[ten] + (one ? " " + ones[one] : "");
-    }
-    if (num < 1000) {
-      const hundred = Math.floor(num / 100);
-      const remainder = num % 100;
-      const hundredWord = hundred === 1 ? "seratus" : ones[hundred] + " ratus";
-      return hundredWord + (remainder ? " " + numberToWords(remainder) : "");
-    }
-    if (num < 1000000) {
-      const thousand = Math.floor(num / 1000);
-      const remainder = num % 1000;
-      const thousandWord =
-        thousand === 1 ? "seribu" : numberToWords(thousand) + " ribu";
-      return thousandWord + (remainder ? " " + numberToWords(remainder) : "");
-    }
-
-    // For larger numbers, use a simplified approach
-    return num.toString();
   };
 
   // Generate document number
@@ -518,91 +514,69 @@ export default function SuratKuasaKhususPage() {
   }, []);
 
   // Fetch document history from Firestore
-  useEffect(() => {
-    const fetchDocumentHistory = async () => {
-      try {
-        console.log("Fetching document history...");
-        setHistoryLoading(true);
+  const fetchDocumentHistory = useCallback(async () => {
+    try {
+      console.log("Fetching document history...");
+      setHistoryLoading(true);
 
-        // Base query - fetch all documents first for client-side filtering
-        const q = query(
-          collection(db, "generated_documents"),
-          orderBy("createdAt", "desc")
-        );
+      // Base query - fetch all documents first for client-side filtering
+      const q = query(
+        collection(db, "generated_documents"),
+        orderBy("createdAt", "desc")
+      );
 
-        const snapshot = await getDocs(q);
-        console.log("Raw documents fetched:", snapshot.size);
+      const snapshot = await getDocs(q);
+      console.log("Raw documents fetched:", snapshot.size);
 
-        let allDocuments = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-          createdAt: doc.data().createdAt?.toDate?.() || new Date(),
-        })) as any[];
+      let allDocuments = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate?.() || new Date(),
+      })) as any[];
 
-        console.log("All documents:", allDocuments);
+      console.log("All documents:", allDocuments);
 
-        // Filter by type (optional - remove if you want all document types)
+      // Filter by type (optional - remove if you want all document types)
+      allDocuments = allDocuments.filter(
+        (doc) => doc.type === "surat_kuasa_khusus" || !doc.type
+      );
+
+      // Apply date range filter
+      if (dateRange.from) {
         allDocuments = allDocuments.filter(
-          (doc) => doc.type === "surat_kuasa_khusus" || !doc.type
+          (doc) => doc.createdAt >= dateRange.from!
         );
-
-        // Apply date range filter
-        if (dateRange.from) {
-          allDocuments = allDocuments.filter(
-            (doc) => doc.createdAt >= dateRange.from!
-          );
-        }
-
-        if (dateRange.to) {
-          const toDate = new Date(dateRange.to);
-          toDate.setHours(23, 59, 59, 999);
-          allDocuments = allDocuments.filter((doc) => doc.createdAt <= toDate);
-        }
-
-        // Apply search filter
-        if (searchTerm) {
-          allDocuments = allDocuments.filter(
-            (doc) =>
-              doc.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-              doc.content?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-              doc.clientName?.toLowerCase().includes(searchTerm.toLowerCase())
-          );
-        }
-
-        // Apply sorting
-        allDocuments.sort((a, b) => {
-          const aValue = sortBy === "date" ? a.createdAt : a.title || "";
-          const bValue = sortBy === "date" ? b.createdAt : b.title || "";
-
-          if (sortOrder === "asc") {
-            return aValue > bValue ? 1 : -1;
-          } else {
-            return aValue < bValue ? 1 : -1;
-          }
-        });
-
-        console.log("Filtered and sorted documents:", allDocuments.length);
-
-        // Apply pagination
-        const startIndex = (currentPage - 1) * itemsPerPage;
-        const endIndex = startIndex + itemsPerPage;
-        const paginatedDocs = allDocuments.slice(startIndex, endIndex);
-
-        setDocumentHistory(paginatedDocs);
-        setHistory(allDocuments); // Store all documents for reference
-        setTotalPages(Math.ceil(allDocuments.length / itemsPerPage));
-
-        console.log("Final paginated documents:", paginatedDocs);
-      } catch (error) {
-        console.error("Error fetching document history:", error);
-        toast.error("Gagal memuat riwayat dokumen");
-      } finally {
-        setHistoryLoading(false);
       }
-    };
 
+      if (dateRange.to) {
+        const toDate = new Date(dateRange.to);
+        toDate.setHours(23, 59, 59, 999);
+        allDocuments = allDocuments.filter((doc) => doc.createdAt <= toDate);
+      }
+
+      // Apply search filter
+      if (searchTerm) {
+        allDocuments = allDocuments.filter(
+          (doc) =>
+            doc.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            doc.clientName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            doc.documentNumber?.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+      }
+
+      console.log("Filtered documents:", allDocuments.length);
+      setDocumentHistory(allDocuments);
+    } catch (error) {
+      console.error("Error fetching document history:", error);
+      setDocumentHistory([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [dateRange, searchTerm]);
+
+  useEffect(() => {
     fetchDocumentHistory();
-  }, [dateRange, searchTerm, sortBy, sortOrder, currentPage, itemsPerPage]);
+  }, [dateRange, searchTerm]);
 
   // Set overall loading state
   useEffect(() => {
@@ -614,6 +588,31 @@ export default function SuratKuasaKhususPage() {
   const selectedDebt = selectedClient?.debtData.debts.find(
     (d) => d.id === selectedDebtId
   );
+
+  // Step 5 memoized values - moved to top level to avoid hook order violations
+  const selectedTemplate = useMemo(
+    () => templates.find((t) => t.id === selectedTemplateId),
+    [templates, selectedTemplateId]
+  );
+
+  const hasContent = useMemo(
+    () => editorContent || (selectedTemplate && selectedTemplate.content),
+    [editorContent, selectedTemplate]
+  );
+
+  const contentForProcessing = useMemo(
+    () => editorContent || (selectedTemplate ? selectedTemplate.content : ""),
+    [editorContent, selectedTemplate]
+  );
+
+  const fileName = useMemo(() => {
+    if (!selectedClient) return "";
+    const clientName = selectedClient.personalData.namaLengkap
+      .replace(/[^a-zA-Z0-9]/g, "_")
+      .toLowerCase();
+    // Use document number as timestamp to avoid constant re-renders
+    return `Surat_Kuasa_Khusus_${clientName}_${documentNumber}`;
+  }, [selectedClient, documentNumber]);
 
   // Filter clients based on search term
   useEffect(() => {
@@ -707,7 +706,7 @@ export default function SuratKuasaKhususPage() {
                       !!selectedClientId &&
                       !!selectedDebtId &&
                       !!documentNumber &&
-                      !!selectedTemplateId
+                      (!!editorContent || !!selectedTemplateId)
                     );
                   case 6:
                     return (
@@ -735,6 +734,19 @@ export default function SuratKuasaKhususPage() {
     documentNumber,
     selectedTemplateId,
   ]);
+
+  // Handle template selection - update editor content when template changes
+  useEffect(() => {
+    if (selectedTemplateId && templates.length > 0) {
+      const selectedTemplate = templates.find(
+        (t) => t.id === selectedTemplateId
+      );
+      if (selectedTemplate && !editorContent) {
+        // Only set editor content if it's empty to avoid overriding user edits
+        setEditorContent(selectedTemplate.content);
+      }
+    }
+  }, [selectedTemplateId, templates, editorContent]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -861,7 +873,7 @@ export default function SuratKuasaKhususPage() {
 
   const handleUseTemplate = (template: Template) => {
     setSelectedTemplateId(template.id);
-    setEditorContent("");
+    setEditorContent(template.content); // Initialize editor with template content
     setShowTemplateManagement(false);
     toast.success(`Template "${template.name}" dipilih`);
   };
@@ -1661,7 +1673,7 @@ export default function SuratKuasaKhususPage() {
   });
 
   // Get available variables
-  const getAvailableVariables = () => {
+  const getAvailableVariables = useCallback(() => {
     if (!selectedClient || !selectedDebt) return [];
 
     const now = new Date();
@@ -1742,23 +1754,38 @@ export default function SuratKuasaKhususPage() {
       { key: "{{nomor_kontrak}}", value: selectedDebt.nomorKartuKontrak },
       { key: "{{outstanding}}", value: selectedDebt.outstanding },
     ];
-  };
+  }, [selectedClient, selectedDebt, documentNumber]);
 
   // Replace variables in template
-  const processTemplate = (content: string) => {
-    let processedContent = content;
-    const variables = getAvailableVariables();
+  const processTemplate = useCallback(
+    (content: string) => {
+      let processedContent = content;
+      const variables = getAvailableVariables();
 
-    variables.forEach((variable) => {
-      const regex = new RegExp(
-        variable.key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-        "g"
-      );
-      processedContent = processedContent.replace(regex, variable.value);
-    });
+      variables.forEach((variable) => {
+        const regex = new RegExp(
+          variable.key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+          "g"
+        );
+        processedContent = processedContent.replace(regex, variable.value);
+      });
 
-    return processedContent;
-  };
+      return processedContent;
+    },
+    [getAvailableVariables]
+  );
+
+  // Memoized processed content for Step 5 - moved to top level to avoid hook order violations
+  const processedContent = useMemo(() => {
+    if (!hasContent || !selectedClient || !selectedDebt) return "";
+    return processTemplate(contentForProcessing);
+  }, [
+    hasContent,
+    contentForProcessing,
+    selectedClient,
+    selectedDebt,
+    processTemplate,
+  ]);
 
   // Step 1: Pilih Klien dengan tips
   const renderStep1 = () => (
@@ -2614,7 +2641,7 @@ export default function SuratKuasaKhususPage() {
                   } dark:bg-gray-800 dark:border-gray-700`}
                   onClick={() => {
                     setSelectedTemplateId(template.id);
-                    setEditorContent("");
+                    setEditorContent(template.content); // Initialize editor with template content
                   }}
                 >
                   <CardHeader className="pb-2">
@@ -2720,57 +2747,49 @@ export default function SuratKuasaKhususPage() {
           </Select>
         </div>
 
-        {/* Variables Section */}
+        {/* Variables Section - Compact */}
         {selectedClient && selectedDebt && (
-          <div className="space-y-4">
+          <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-medium dark:text-gray-200">
-                Variabel yang Tersedia
+              <h3 className="text-base font-medium dark:text-gray-200">
+                Variabel Tersedia ({variables.length})
               </h3>
-              <div className="text-sm text-gray-500 dark:text-gray-400">
-                {variables.length} variabel
-              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowVariables(!showVariables)}
+                className="text-xs"
+              >
+                {showVariables ? "Sembunyikan" : "Tampilkan"} Variabel
+              </Button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {variables.map((variable, index) => (
-                <Card
-                  key={index}
-                  className="group cursor-pointer hover:shadow-md transition-all border-l-4 border-l-blue-500 dark:bg-gray-800 dark:border-gray-700"
-                  onClick={() => {
-                    navigator.clipboard.writeText(variable.key);
-                    toast.success(
-                      `Variabel "${variable.key}" disalin ke clipboard`
-                    );
-                  }}
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0">
-                        <code className="text-sm font-mono text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded">
-                          {variable.key}
-                        </code>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 truncate">
-                          {variable.value}
-                        </p>
+            {showVariables && (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                  {variables.map((variable, index) => (
+                    <div
+                      key={index}
+                      className="group cursor-pointer p-2 border rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 dark:border-gray-700 transition-colors"
+                      onClick={() => {
+                        navigator.clipboard.writeText(variable.key);
+                        toast.success(`${variable.key} disalin`);
+                      }}
+                    >
+                      <code className="text-xs font-mono text-blue-600 dark:text-blue-400 block truncate">
+                        {variable.key}
+                      </code>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">
+                        {variable.value}
                       </div>
-                      <Copy className="h-4 w-4 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-
-            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-              <div className="flex items-start gap-2">
-                <div className="w-4 h-4 text-blue-500 mt-0.5">💡</div>
-                <div className="text-sm text-blue-700 dark:text-blue-300">
-                  <strong>Tips:</strong> Klik pada variabel mana saja untuk
-                  menyalin ke clipboard. Variabel akan otomatis diganti dengan
-                  data aktual saat dokumen dibuat.
+                  ))}
                 </div>
-              </div>
-            </div>
+                <div className="text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 p-2 rounded">
+                  💡 Klik variabel untuk menyalin ke clipboard
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -2809,8 +2828,10 @@ export default function SuratKuasaKhususPage() {
 
             <div className="border rounded-lg p-4 dark:border-gray-700">
               <RichEditor
-                content={editorContent || selectedTemplate.content}
-                onChange={setEditorContent}
+                content={editorContent}
+                onChange={(text, html) => setEditorContent(html)} // Use HTML content
+                showToolbar={true}
+                showSourceCode={false}
               />
             </div>
 
@@ -2883,7 +2904,7 @@ export default function SuratKuasaKhususPage() {
                 <Button
                   onClick={() => {
                     setSelectedTemplateId(selectedTemplateForView.id);
-                    setEditorContent("");
+                    setEditorContent(selectedTemplateForView.content); // Initialize editor with template content
                     setIsTemplateViewDialogOpen(false);
                     toast.success("Template dipilih");
                   }}
@@ -2894,6 +2915,678 @@ export default function SuratKuasaKhususPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+      </div>
+    );
+  };
+
+  // Step 5: Generate & Print - Optimized
+  const renderStep5 = () => {
+    // Early return for incomplete data
+    if (!selectedClient || !selectedDebt || !hasContent) {
+      return (
+        <div className="text-center py-12">
+          <div className="w-16 h-16 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
+            <AlertCircle className="h-8 w-8 text-red-600 dark:text-red-400" />
+          </div>
+          <h3 className="text-lg font-medium text-red-600 dark:text-red-400 mb-2">
+            Langkah Belum Lengkap
+          </h3>
+          <p className="text-red-500 dark:text-red-400 mb-4">
+            Selesaikan semua langkah sebelumnya terlebih dahulu
+          </p>
+          <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
+            {!selectedClient && <p>• Pilih klien terlebih dahulu</p>}
+            {!selectedDebt && <p>• Pilih hutang terlebih dahulu</p>}
+            {!hasContent && (
+              <p>• Pilih template atau lengkapi konten dokumen</p>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // Optimized print styles - extracted to avoid repetition
+    const printStyles = `
+      @page {
+        size: A4;
+        margin: 2.5cm;
+      }
+      @media print {
+        body { -webkit-print-color-adjust: exact; }
+        * { print-color-adjust: exact; }
+      }
+      body {
+        font-family: 'Times New Roman', serif;
+        font-size: 12pt;
+        line-height: 1.6;
+        color: #000;
+        background: #fff;
+        margin: 0;
+        padding: 0;
+      }
+      .header {
+        text-align: center;
+        margin-bottom: 30px;
+        font-weight: bold;
+        text-transform: uppercase;
+      }
+      .content {
+        text-align: justify;
+        margin-bottom: 30px;
+      }
+      .signature-section {
+        margin-top: 50px;
+        display: flex;
+        justify-content: space-between;
+      }
+      .signature-box {
+        text-align: center;
+        width: 200px;
+      }
+      .signature-line {
+        border-bottom: 1px solid #000;
+        margin-top: 80px;
+        margin-bottom: 5px;
+      }
+      p { margin-bottom: 10px; }
+      h1, h2, h3 { margin: 20px 0 10px 0; }
+      ul, ol { margin: 10px 0; padding-left: 30px; }
+      table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+      th, td { border: 1px solid #000; padding: 8px; text-align: left; }
+    `;
+
+    // Optimized print handler with better error handling
+    const handlePrintDocument = useCallback(() => {
+      try {
+        const printWindow = window.open("", "_blank");
+        if (!printWindow) {
+          toast.error(
+            "Popup diblokir. Harap izinkan popup untuk mencetak dokumen."
+          );
+          return;
+        }
+
+        // Get fresh content at print time
+        const currentContentForProcessing =
+          editorContent || (selectedTemplate ? selectedTemplate.content : "");
+        const currentProcessedContent = processTemplate(
+          currentContentForProcessing
+        );
+
+        const documentTitle = `Surat Kuasa Khusus - ${selectedClient.personalData.namaLengkap}`;
+
+        printWindow.document.write(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="UTF-8">
+              <title>${documentTitle}</title>
+              <style>${printStyles}</style>
+            </head>
+            <body>
+              ${currentProcessedContent}
+            </body>
+          </html>
+        `);
+
+        printWindow.document.close();
+
+        // Wait for content to load before printing
+        printWindow.onload = () => {
+          setTimeout(() => {
+            printWindow.print();
+            printWindow.close();
+          }, 250);
+        };
+
+        toast.success("Dokumen siap untuk dicetak");
+      } catch (error) {
+        console.error("Error printing document:", error);
+        toast.error("Gagal membuka dialog cetak");
+      }
+    }, [
+      editorContent,
+      selectedTemplate,
+      processTemplate,
+      selectedClient?.personalData.namaLengkap,
+    ]);
+
+    // Optimized PDF download with better performance
+    const handleDownloadPDF = useCallback(async () => {
+      if (isDownloading) return; // Prevent double-click
+
+      try {
+        setIsDownloading(true);
+        toast.info("Sedang mempersiapkan PDF...");
+
+        // Dynamic import for better code splitting
+        const html2pdf = (await import("html2pdf.js")).default;
+
+        // Get fresh content at download time
+        const currentContentForProcessing =
+          editorContent || (selectedTemplate ? selectedTemplate.content : "");
+        const currentProcessedContent = processTemplate(
+          currentContentForProcessing
+        );
+
+        // Create optimized temporary container
+        const element = document.createElement("div");
+        element.innerHTML = currentProcessedContent;
+
+        // Apply styles for better PDF rendering
+        Object.assign(element.style, {
+          fontFamily: "Times New Roman, serif",
+          fontSize: "12pt",
+          lineHeight: "1.6",
+          color: "#000",
+          background: "#fff",
+          padding: "20px",
+          width: "210mm",
+          minHeight: "297mm",
+        });
+
+        // Optimized PDF options
+        const pdfOptions = {
+          margin: [25, 25, 25, 25],
+          filename: `${fileName}.pdf`,
+          image: {
+            type: "jpeg",
+            quality: 0.95, // Slightly reduced for faster processing
+          },
+          html2canvas: {
+            scale: 1.5, // Reduced scale for better performance
+            useCORS: true,
+            letterRendering: true,
+            allowTaint: true,
+            backgroundColor: "#ffffff",
+          },
+          jsPDF: {
+            unit: "mm",
+            format: "a4",
+            orientation: "portrait",
+            compress: true,
+          },
+        };
+
+        await html2pdf().set(pdfOptions).from(element).save();
+        toast.success("Dokumen PDF berhasil diunduh");
+      } catch (error) {
+        console.error("Error generating PDF:", error);
+        const errorMessage =
+          error instanceof Error
+            ? error.message
+            : "Terjadi kesalahan tidak diketahui";
+        toast.error(`Gagal membuat PDF: ${errorMessage}`);
+      } finally {
+        setIsDownloading(false);
+      }
+    }, [
+      fileName,
+      isDownloading,
+      editorContent,
+      selectedTemplate,
+      processTemplate,
+    ]);
+
+    // Optimized save document with better validation
+    const handleSaveDocument = useCallback(async () => {
+      if (saving) return; // Prevent double-click
+
+      try {
+        setSaving(true);
+        toast.info("Sedang menyimpan dokumen...");
+
+        // Validate required data before saving
+        if (!selectedClientId || !selectedDebtId || !documentNumber) {
+          toast.error("Data klien atau hutang tidak lengkap");
+          return;
+        }
+
+        // Get fresh content at save time to avoid stale closures
+        const currentContentForProcessing =
+          editorContent || (selectedTemplate ? selectedTemplate.content : "");
+        const currentProcessedContent = processTemplate(
+          currentContentForProcessing
+        );
+
+        const documentData = {
+          clientId: selectedClientId,
+          clientName: selectedClient.personalData.namaLengkap,
+          clientNik: selectedClient.personalData.nik,
+          debtId: selectedDebtId,
+          debtType: selectedDebt?.jenisHutang || "N/A",
+          bankProvider: selectedDebt?.bankProvider || "N/A",
+          documentNumber,
+          content: currentProcessedContent,
+          rawContent: currentContentForProcessing,
+          variables: getAvailableVariables(),
+          templateId: selectedTemplateId,
+          templateName: selectedTemplate?.name || "Template Custom",
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          // Additional metadata for better tracking
+          metadata: {
+            fileName,
+            contentLength: currentProcessedContent.length,
+            variableCount: getAvailableVariables().length,
+          },
+        };
+
+        await addDoc(collection(db, "surat-kuasa-khusus"), documentData);
+        toast.success("Dokumen berhasil disimpan ke database");
+
+        // Refresh document history
+        fetchDocumentHistory();
+      } catch (error) {
+        console.error("Error saving document:", error);
+        const errorMessage =
+          error instanceof Error
+            ? error.message
+            : "Terjadi kesalahan tidak diketahui";
+        toast.error(`Gagal menyimpan dokumen: ${errorMessage}`);
+      } finally {
+        setSaving(false);
+      }
+    }, [
+      saving,
+      selectedClientId,
+      selectedDebtId,
+      documentNumber,
+      selectedClient,
+      selectedDebt,
+      selectedTemplateId,
+      selectedTemplate,
+      fileName,
+      editorContent,
+      processTemplate,
+      getAvailableVariables,
+      fetchDocumentHistory,
+    ]);
+
+    // Enhanced UI with loading states and better feedback
+    return (
+      <div className="space-y-6">
+        {/* Loading state while processing */}
+        {!processedContent && hasContent && (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mr-3"></div>
+            <span className="text-gray-600 dark:text-gray-400">
+              Memproses template dan variabel...
+            </span>
+          </div>
+        )}
+
+        {/* Enhanced Header with Status */}
+        <div className="text-center">
+          <div className="flex items-center justify-center gap-2 mb-3">
+            <div className="w-8 h-8 bg-green-100 dark:bg-green-900/20 rounded-full flex items-center justify-center">
+              <Check className="h-5 w-5 text-green-600 dark:text-green-400" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+              Dokumen Siap
+            </h3>
+          </div>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
+            Dokumen telah diproses dan siap untuk dicetak, diunduh, atau
+            disimpan
+          </p>
+
+          {/* Document Status Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-2xl mx-auto">
+            <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+              <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
+                <FileText className="h-4 w-4" />
+                <span className="text-sm font-medium">Template Diproses</span>
+              </div>
+              <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                {(() => {
+                  try {
+                    return `${getAvailableVariables().length} variabel diganti`;
+                  } catch (error) {
+                    console.warn("Error getting variables count:", error);
+                    return "Variabel diproses";
+                  }
+                })()}
+              </p>
+            </div>
+            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
+                <User className="h-4 w-4" />
+                <span className="text-sm font-medium">Data Klien</span>
+              </div>
+              <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                {selectedClient?.personalData?.namaLengkap || "N/A"}
+              </p>
+            </div>
+            <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+              <div className="flex items-center gap-2 text-purple-700 dark:text-purple-300">
+                <Hash className="h-4 w-4" />
+                <span className="text-sm font-medium">No. Dokumen</span>
+              </div>
+              <p className="text-xs text-purple-600 dark:text-purple-400 mt-1 font-mono">
+                {documentNumber}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Enhanced Document Preview with Better Scaling */}
+        <Card className="dark:bg-gray-800 dark:border-gray-700">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="dark:text-gray-200 flex items-center gap-2">
+                  <Eye className="h-5 w-5" />
+                  Preview Dokumen
+                </CardTitle>
+                <CardDescription className="dark:text-gray-400">
+                  Format kertas A4 (210 × 297 mm) dengan margin 2.5 cm
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
+                <div className="flex items-center gap-1">
+                  <FileText className="h-4 w-4" />
+                  <span className="hidden sm:inline">{documentNumber}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  <span className="hidden sm:inline">Siap Cetak</span>
+                </div>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {/* A4 Preview Container with Better Responsive Design */}
+            <div className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden shadow-sm">
+              <div
+                className="a4-preview mx-auto relative"
+                style={{
+                  width: "210mm",
+                  minHeight: "297mm",
+                  maxWidth: "100%",
+                  padding: "25mm",
+                  fontFamily: "Times New Roman, serif",
+                  fontSize: "12pt",
+                  lineHeight: "1.6",
+                  color: "#000",
+                  backgroundColor: "#fff",
+                  transform: "scale(0.65)",
+                  transformOrigin: "top center",
+                  border: "1px solid #ddd",
+                  marginBottom: "-150px", // Adjust for scaling
+                }}
+              >
+                {/* Loading overlay for preview */}
+                {processedContent ? (
+                  <div
+                    className="prose prose-sm max-w-none"
+                    dangerouslySetInnerHTML={{ __html: processedContent }}
+                    style={{
+                      fontFamily: "inherit",
+                      fontSize: "inherit",
+                      lineHeight: "inherit",
+                      color: "inherit",
+                    }}
+                  />
+                ) : (
+                  <div className="flex items-center justify-center h-40">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  </div>
+                )}
+
+                {/* Preview Watermark */}
+                <div className="absolute top-4 right-4 bg-blue-100 dark:bg-blue-900/20 px-2 py-1 rounded text-xs text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
+                  PREVIEW
+                </div>
+              </div>
+            </div>
+
+            {/* Document Statistics */}
+            <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div className="text-center">
+                <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                  {processedContent
+                    ? processedContent.replace(/<[^>]*>/g, "").length
+                    : 0}
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  Karakter
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                  {processedContent
+                    ? processedContent
+                        .split(/\s+/)
+                        .filter((word) => word.length > 0).length
+                    : 0}
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  Kata
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                  {(() => {
+                    try {
+                      return getAvailableVariables().length;
+                    } catch (error) {
+                      console.warn("Error getting available variables:", error);
+                      return 0;
+                    }
+                  })()}
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  Variabel
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                  A4
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  Format
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Enhanced Action Buttons with Loading States */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Save Document Card */}
+          <Card className="dark:bg-gray-800 dark:border-gray-700 hover:shadow-md transition-shadow">
+            <CardContent className="p-6">
+              <div className="text-center">
+                <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center mx-auto mb-3 relative">
+                  <Save className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                  {saving && (
+                    <div className="absolute inset-0 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                    </div>
+                  )}
+                </div>
+                <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-2">
+                  Simpan Dokumen
+                </h4>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  Simpan ke database untuk akses di masa mendatang dan audit
+                  trail
+                </p>
+                <Button
+                  onClick={handleSaveDocument}
+                  disabled={saving}
+                  className="w-full"
+                  size="sm"
+                >
+                  {saving ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Menyimpan...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4 mr-2" />
+                      Simpan Dokumen
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Print Document Card */}
+          <Card className="dark:bg-gray-800 dark:border-gray-700 hover:shadow-md transition-shadow">
+            <CardContent className="p-6">
+              <div className="text-center">
+                <div className="w-12 h-12 bg-green-100 dark:bg-green-900 rounded-lg flex items-center justify-center mx-auto mb-3">
+                  <Printer className="h-6 w-6 text-green-600 dark:text-green-400" />
+                </div>
+                <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-2">
+                  Print Dokumen
+                </h4>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  Cetak langsung dalam format A4 dengan margin standar
+                </p>
+                <Button
+                  onClick={handlePrintDocument}
+                  variant="outline"
+                  className="w-full"
+                  size="sm"
+                >
+                  <Printer className="h-4 w-4 mr-2" />
+                  Print A4
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Download PDF Card */}
+          <Card className="dark:bg-gray-800 dark:border-gray-700 hover:shadow-md transition-shadow">
+            <CardContent className="p-6">
+              <div className="text-center">
+                <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900 rounded-lg flex items-center justify-center mx-auto mb-3 relative">
+                  <Download className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                  {isDownloading && (
+                    <div className="absolute inset-0 bg-purple-100 dark:bg-purple-900 rounded-lg flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600"></div>
+                    </div>
+                  )}
+                </div>
+                <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-2">
+                  Download PDF
+                </h4>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  Unduh sebagai file PDF berkualitas tinggi format A4
+                </p>
+                <Button
+                  onClick={handleDownloadPDF}
+                  disabled={isDownloading}
+                  variant="outline"
+                  className="w-full"
+                  size="sm"
+                >
+                  {isDownloading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-gray-400 border-t-transparent mr-2"></div>
+                      Membuat PDF...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="h-4 w-4 mr-2" />
+                      Download PDF
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Enhanced Document Information */}
+        <Card className="dark:bg-gray-800 dark:border-gray-700">
+          <CardHeader>
+            <CardTitle className="dark:text-gray-200 flex items-center gap-2">
+              <Info className="h-5 w-5" />
+              Informasi Dokumen
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <User className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                    Data Klien
+                  </span>
+                </div>
+                <div className="pl-6 space-y-1">
+                  <p className="font-medium text-gray-900 dark:text-gray-100">
+                    {selectedClient?.personalData?.namaLengkap || "N/A"}
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 font-mono">
+                    NIK: {selectedClient?.personalData?.nik || "N/A"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                    Informasi Hutang
+                  </span>
+                </div>
+                <div className="pl-6 space-y-1">
+                  <p className="font-medium text-gray-900 dark:text-gray-100">
+                    {selectedDebt?.jenisHutang || "N/A"}
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {selectedDebt?.bankProvider || "N/A"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Hash className="h-4 w-4 text-green-600 dark:text-green-400" />
+                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                    Nomor Dokumen
+                  </span>
+                </div>
+                <div className="pl-6">
+                  <p className="font-medium text-gray-900 dark:text-gray-100 font-mono">
+                    {documentNumber}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                    Template
+                  </span>
+                </div>
+                <div className="pl-6">
+                  <p className="font-medium text-gray-900 dark:text-gray-100">
+                    {selectedTemplate?.name || "Template Custom"}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Additional metadata */}
+            <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                <span>
+                  Dokumen dibuat: {new Date().toLocaleString("id-ID")}
+                </span>
+                <span>Nama file: {fileName}.pdf</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   };
@@ -2970,6 +3663,13 @@ export default function SuratKuasaKhususPage() {
           return !!selectedClientId && !!selectedDebtId;
         case 4: // Untuk ke step 4, harus ada client, debt, dan document number
           return !!selectedClientId && !!selectedDebtId && !!documentNumber;
+        case 5: // Untuk ke step 5, harus ada content dari editor atau template yang dipilih
+          return (
+            !!selectedClientId &&
+            !!selectedDebtId &&
+            !!documentNumber &&
+            (!!editorContent || !!selectedTemplateId)
+          );
         default:
           return true;
       }
@@ -2980,6 +3680,8 @@ export default function SuratKuasaKhususPage() {
       if (step === 2 && !selectedDebtId) return "Pilih hutang terlebih dahulu";
       if (step === 3 && !documentNumber)
         return "Nomor dokumen belum ter-generate";
+      if (step === 4 && !editorContent && !selectedTemplateId)
+        return "Pilih template atau lengkapi konten dokumen terlebih dahulu";
       return "";
     };
 
@@ -3004,20 +3706,33 @@ export default function SuratKuasaKhususPage() {
               {nextMessage}
             </p>
           )}
-          <Button
-            onClick={() => setStep(step + 1)}
-            disabled={!canNext}
-            className="flex items-center gap-2"
-          >
-            Selanjutnya
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+          {step < STEPS.length ? (
+            <Button
+              onClick={() => setStep(step + 1)}
+              disabled={!canNext}
+              className="flex items-center gap-2"
+            >
+              Selanjutnya
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button
+              onClick={() => {
+                toast.success("Dokumen siap untuk dicetak atau diunduh!");
+                // Could redirect or perform other actions here
+              }}
+              className="flex items-center gap-2"
+            >
+              <Check className="h-4 w-4" />
+              Selesai
+            </Button>
+          )}
         </div>
       </div>
     );
   };
 
-  // Document History Component
+  // Document History Component with Complete CRUD Table
   const renderDocumentHistory = () => {
     return (
       <Card className="mt-8">
@@ -3028,28 +3743,27 @@ export default function SuratKuasaKhususPage() {
                 Riwayat Dokumen
               </CardTitle>
               <CardDescription className="dark:text-gray-400">
-                Kelola dan lihat semua dokumen surat kuasa khusus yang telah
-                dibuat
+                Kelola semua dokumen surat kuasa khusus yang telah dibuat
               </CardDescription>
             </div>
             <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
               <FileText className="h-4 w-4" />
-              {filteredHistory.length} dokumen
+              {filteredHistory.length} dari {documentHistory.length} dokumen
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          {/* Filters and Search */}
-          <div className="flex flex-col md:flex-row gap-4 mb-6">
+          {/* Advanced Filters and Search */}
+          <div className="flex flex-col md:flex-row gap-4 mb-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
             <div className="flex-1">
               <Input
-                placeholder="Cari berdasarkan nama klien, nomor dokumen..."
+                placeholder="Cari berdasarkan nama klien, nomor dokumen, atau konten..."
                 value={historySearchTerm}
                 onChange={(e) => {
                   setHistorySearchTerm(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="dark:bg-gray-800 dark:border-gray-700"
+                className="dark:bg-gray-700 dark:border-gray-600"
               />
             </div>
             <div className="flex gap-2">
@@ -3060,14 +3774,14 @@ export default function SuratKuasaKhususPage() {
                   setCurrentPage(1);
                 }}
               >
-                <SelectTrigger className="w-32 dark:bg-gray-800 dark:border-gray-700">
+                <SelectTrigger className="w-32 dark:bg-gray-700 dark:border-gray-600">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
-                  <SelectItem value="all">Semua</SelectItem>
-                  <SelectItem value="today">Hari ini</SelectItem>
-                  <SelectItem value="week">7 hari</SelectItem>
-                  <SelectItem value="month">30 hari</SelectItem>
+                  <SelectItem value="all">Semua Periode</SelectItem>
+                  <SelectItem value="today">Hari Ini</SelectItem>
+                  <SelectItem value="week">7 Hari Terakhir</SelectItem>
+                  <SelectItem value="month">30 Hari Terakhir</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -3075,13 +3789,13 @@ export default function SuratKuasaKhususPage() {
                 value={sortBy}
                 onValueChange={(value: any) => setSortBy(value)}
               >
-                <SelectTrigger className="w-32 dark:bg-gray-800 dark:border-gray-700">
+                <SelectTrigger className="w-32 dark:bg-gray-700 dark:border-gray-600">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
-                  <SelectItem value="date">Tanggal</SelectItem>
-                  <SelectItem value="client">Klien</SelectItem>
-                  <SelectItem value="document">Nomor</SelectItem>
+                  <SelectItem value="date">Urutkan: Tanggal</SelectItem>
+                  <SelectItem value="client">Urutkan: Klien</SelectItem>
+                  <SelectItem value="document">Urutkan: Nomor</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -3091,38 +3805,52 @@ export default function SuratKuasaKhususPage() {
                 onClick={() =>
                   setSortOrder(sortOrder === "asc" ? "desc" : "asc")
                 }
-                className="px-3 dark:border-gray-700"
+                className="px-3 dark:border-gray-600"
               >
                 {sortOrder === "asc" ? "↑" : "↓"}
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setHistorySearchTerm("");
+                  setHistoryFilter("all");
+                  setSortBy("date");
+                  setSortOrder("desc");
+                  setCurrentPage(1);
+                }}
+                className="dark:border-gray-600"
+              >
+                Reset
               </Button>
             </div>
           </div>
 
-          {/* Document List */}
+          {/* Document Table */}
           {historyLoading ? (
-            <div className="space-y-4">
-              {[1, 2, 3].map((i) => (
+            <div className="space-y-2">
+              {[1, 2, 3, 4, 5].map((i) => (
                 <div
                   key={i}
-                  className="p-4 border rounded-lg dark:border-gray-700"
-                >
-                  <div className="animate-pulse">
-                    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-2"></div>
-                    <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/2 mb-2"></div>
-                    <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/3"></div>
-                  </div>
-                </div>
+                  className="h-16 bg-gray-200 dark:bg-gray-700 animate-pulse rounded"
+                ></div>
               ))}
             </div>
           ) : paginatedHistory.length === 0 ? (
-            <div className="text-center py-8 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
-              <FileText className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-              <p className="text-gray-500 dark:text-gray-400 mb-2">
+            <div className="text-center py-12 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
+              <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-200 mb-2">
                 {historySearchTerm || historyFilter !== "all"
-                  ? "Tidak ada dokumen yang sesuai dengan filter"
-                  : "Belum ada dokumen yang dibuat"}
+                  ? "Tidak ada dokumen yang sesuai"
+                  : "Belum ada dokumen"}
+              </h3>
+              <p className="text-gray-500 dark:text-gray-400 mb-4">
+                {historySearchTerm || historyFilter !== "all"
+                  ? "Coba ubah filter atau kata kunci pencarian"
+                  : "Dokumen yang dibuat akan muncul di sini"}
               </p>
-              {historySearchTerm || historyFilter !== "all" ? (
+              {(historySearchTerm || historyFilter !== "all") && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -3132,126 +3860,310 @@ export default function SuratKuasaKhususPage() {
                     setCurrentPage(1);
                   }}
                 >
-                  Reset Filter
+                  Hapus Filter
                 </Button>
-              ) : null}
+              )}
             </div>
           ) : (
-            <div className="space-y-4">
-              {paginatedHistory.map((doc) => (
-                <Card
-                  key={doc.id}
-                  className="p-4 hover:shadow-md transition-shadow dark:bg-gray-800 dark:border-gray-700"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h4 className="font-medium dark:text-gray-200">
-                          {doc.clientName}
-                        </h4>
-                        <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 text-xs rounded">
-                          {doc.documentNumber}
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
-                        Dibuat:{" "}
-                        {new Date(doc.createdAt).toLocaleString("id-ID")}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-500 line-clamp-2">
-                        {doc.content?.replace(/<[^>]*>/g, "").substring(0, 100)}
-                        ...
-                      </p>
+            <>
+              {/* Data Table */}
+              <div className="border rounded-lg dark:border-gray-700 overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-gray-50 dark:bg-gray-800">
+                      <TableHead className="w-12 dark:text-gray-300">
+                        <Checkbox />
+                      </TableHead>
+                      <TableHead className="dark:text-gray-300">
+                        Nomor Dokumen
+                      </TableHead>
+                      <TableHead className="dark:text-gray-300">
+                        Klien
+                      </TableHead>
+                      <TableHead className="dark:text-gray-300">
+                        Jenis Hutang
+                      </TableHead>
+                      <TableHead className="dark:text-gray-300">
+                        Bank/Provider
+                      </TableHead>
+                      <TableHead className="dark:text-gray-300">
+                        Tanggal Dibuat
+                      </TableHead>
+                      <TableHead className="dark:text-gray-300">
+                        Status
+                      </TableHead>
+                      <TableHead className="text-center dark:text-gray-300">
+                        Aksi
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedHistory.map((doc, index) => (
+                      <TableRow
+                        key={doc.id}
+                        className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                      >
+                        <TableCell>
+                          <Checkbox />
+                        </TableCell>
+                        <TableCell className="font-mono text-sm dark:text-gray-200">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                            {doc.documentNumber}
+                          </div>
+                        </TableCell>
+                        <TableCell className="dark:text-gray-200">
+                          <div className="font-medium">{doc.clientName}</div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            Client ID: {doc.clientId?.substring(0, 8)}...
+                          </div>
+                        </TableCell>
+                        <TableCell className="dark:text-gray-200">
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center">
+                              <div className="w-1 h-1 bg-green-600 rounded-full"></div>
+                            </div>
+                            {doc.variables?.find(
+                              (v: any) => v.key === "{{jenis_hutang}}"
+                            )?.value || "N/A"}
+                          </div>
+                        </TableCell>
+                        <TableCell className="dark:text-gray-200">
+                          {doc.variables?.find(
+                            (v: any) => v.key === "{{bank_provider}}"
+                          )?.value || "N/A"}
+                        </TableCell>
+                        <TableCell className="dark:text-gray-200">
+                          <div className="text-sm">
+                            {doc.createdAt
+                              ? new Date(
+                                  doc.createdAt.seconds
+                                    ? doc.createdAt.seconds * 1000
+                                    : doc.createdAt
+                                ).toLocaleDateString("id-ID", {
+                                  day: "numeric",
+                                  month: "short",
+                                  year: "numeric",
+                                })
+                              : "N/A"}
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            {doc.createdAt
+                              ? new Date(
+                                  doc.createdAt.seconds
+                                    ? doc.createdAt.seconds * 1000
+                                    : doc.createdAt
+                                ).toLocaleTimeString("id-ID", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })
+                              : "N/A"}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                            <span className="text-sm text-green-600 dark:text-green-400 font-medium">
+                              Aktif
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center justify-center gap-1">
+                            {/* View Button */}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleViewDocument(doc)}
+                              className="h-8 w-8 p-0 hover:bg-blue-100 dark:hover:bg-blue-900"
+                              title="Lihat Dokumen"
+                            >
+                              <Eye className="h-4 w-4 text-blue-600" />
+                            </Button>
+
+                            {/* Download Button */}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleDownloadExistingPDF(doc)}
+                              disabled={isDownloading}
+                              className="h-8 w-8 p-0 hover:bg-purple-100 dark:hover:bg-purple-900"
+                              title="Download PDF"
+                            >
+                              <Download className="h-4 w-4 text-purple-600" />
+                            </Button>
+
+                            {/* More Actions Dropdown */}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-8 w-8 p-0"
+                                >
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent
+                                align="end"
+                                className="dark:bg-gray-800 dark:border-gray-700"
+                              >
+                                <DropdownMenuItem
+                                  onClick={() => handleDuplicateDocument(doc)}
+                                  className="dark:hover:bg-gray-700"
+                                >
+                                  <Copy className="h-4 w-4 mr-2" />
+                                  Duplikasi
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    // Edit functionality - redirect to create with pre-filled data
+                                    const url = new URL(window.location.href);
+                                    url.searchParams.set("edit", doc.id);
+                                    window.location.href = url.toString();
+                                  }}
+                                  className="dark:hover:bg-gray-700"
+                                >
+                                  <Edit className="h-4 w-4 mr-2" />
+                                  Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setDocumentToDelete(doc);
+                                    setIsDeleteConfirmOpen(true);
+                                  }}
+                                  className="text-red-600 dark:text-red-400 dark:hover:bg-gray-700"
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Hapus
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Enhanced Pagination */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between mt-6 pt-4 border-t dark:border-gray-700">
+                  <div className="flex items-center gap-4">
+                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                      Menampilkan {(currentPage - 1) * itemsPerPage + 1} -{" "}
+                      {Math.min(
+                        currentPage * itemsPerPage,
+                        filteredHistory.length
+                      )}{" "}
+                      dari {filteredHistory.length} dokumen
                     </div>
-                    <div className="flex items-center gap-2 ml-4">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleViewDocument(doc)}
-                        className="dark:border-gray-600"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDownloadExistingPDF(doc)}
-                        disabled={isDownloading}
-                        className="dark:border-gray-600"
-                      >
-                        <Download className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setDocumentToDelete(doc);
-                          setIsDeleteConfirmOpen(true);
-                        }}
-                        className="text-red-600 hover:text-red-700 dark:border-gray-600"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    <Select
+                      value={itemsPerPage.toString()}
+                      onValueChange={(value) => {
+                        setItemsPerPage(parseInt(value));
+                        setCurrentPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="w-20 dark:bg-gray-700 dark:border-gray-600">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
+                        <SelectItem value="5">5</SelectItem>
+                        <SelectItem value="10">10</SelectItem>
+                        <SelectItem value="20">20</SelectItem>
+                        <SelectItem value="50">50</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                      per halaman
+                    </span>
                   </div>
-                </Card>
-              ))}
-            </div>
-          )}
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between mt-6 pt-4 border-t dark:border-gray-700">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600 dark:text-gray-400">
-                  Menampilkan {(currentPage - 1) * itemsPerPage + 1} -{" "}
-                  {Math.min(currentPage * itemsPerPage, filteredHistory.length)}{" "}
-                  dari {filteredHistory.length} dokumen
-                </span>
-                <Select
-                  value={itemsPerPage.toString()}
-                  onValueChange={(value) => {
-                    setItemsPerPage(parseInt(value));
-                    setCurrentPage(1);
-                  }}
-                >
-                  <SelectTrigger className="w-20 h-8 dark:bg-gray-800 dark:border-gray-700">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
-                    <SelectItem value="5">5</SelectItem>
-                    <SelectItem value="10">10</SelectItem>
-                    <SelectItem value="20">20</SelectItem>
-                    <SelectItem value="50">50</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(1)}
+                      disabled={currentPage === 1}
+                      className="dark:border-gray-600"
+                    >
+                      <div className="flex items-center gap-1">
+                        <ChevronLeft className="h-4 w-4" />
+                        <ChevronLeft className="h-4 w-4 -ml-2" />
+                      </div>
+                    </Button>
 
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(currentPage - 1)}
-                  disabled={currentPage === 1}
-                  className="dark:border-gray-700"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className="dark:border-gray-600"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
 
-                <span className="text-sm text-gray-600 dark:text-gray-400">
-                  {currentPage} / {totalPages}
-                </span>
+                    <div className="flex items-center gap-1">
+                      {Array.from(
+                        { length: Math.min(5, totalPages) },
+                        (_, i) => {
+                          let pageNum;
+                          if (totalPages <= 5) {
+                            pageNum = i + 1;
+                          } else if (currentPage <= 3) {
+                            pageNum = i + 1;
+                          } else if (currentPage >= totalPages - 2) {
+                            pageNum = totalPages - 4 + i;
+                          } else {
+                            pageNum = currentPage - 2 + i;
+                          }
 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(currentPage + 1)}
-                  disabled={currentPage === totalPages}
-                  className="dark:border-gray-700"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
+                          return (
+                            <Button
+                              key={pageNum}
+                              variant={
+                                currentPage === pageNum ? "default" : "outline"
+                              }
+                              size="sm"
+                              onClick={() => setCurrentPage(pageNum)}
+                              className="w-8 h-8 p-0 dark:border-gray-600"
+                            >
+                              {pageNum}
+                            </Button>
+                          );
+                        }
+                      )}
+                    </div>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                      className="dark:border-gray-600"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(totalPages)}
+                      disabled={currentPage === totalPages}
+                      className="dark:border-gray-600"
+                    >
+                      <div className="flex items-center gap-1">
+                        <ChevronRight className="h-4 w-4" />
+                        <ChevronRight className="h-4 w-4 -ml-2" />
+                      </div>
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
@@ -3620,6 +4532,7 @@ export default function SuratKuasaKhususPage() {
                   {step === 2 && renderStep2()}
                   {step === 3 && renderStep3()}
                   {step === 4 && renderStep4()}
+                  {step === 5 && renderStep5()}
 
                   {renderNavigation()}
                 </CardContent>
